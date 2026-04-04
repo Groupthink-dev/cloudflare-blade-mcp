@@ -1,4 +1,4 @@
-name = "cloudflare-dns-mcp"
+name = "cloudflare-blade-mcp"
 main = "dist/index.js"
 compatibility_date = "2024-12-01"
 
@@ -10,6 +10,7 @@ TRANSPORT = "http"
 
 # Secrets — set via:
 #   wrangler secret put CLOUDFLARE_API_TOKEN
+#   wrangler secret put CLOUDFLARE_ACCOUNT_ID
 #   wrangler secret put CLOUDFLARE_DNS_MCP_API_KEY
 
 [build]

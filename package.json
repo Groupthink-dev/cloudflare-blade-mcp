@@ -1,9 +1,12 @@
 {
-  "name": "cloudflare-dns-mcp-server",
-  "version": "1.0.0",
-  "description": "Best-of-breed MCP server for Cloudflare DNS management with extreme token efficiency",
+  "name": "cloudflare-blade-mcp",
+  "version": "0.1.0",
+  "description": "Cloudflare platform MCP server — DNS, KV, D1, Tunnels with token-efficient defaults",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "cloudflare-blade-mcp": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -11,7 +14,10 @@
     "dev:http": "TRANSPORT=http tsx watch src/index.ts",
     "clean": "rm -rf dist",
     "deploy": "pnpm build && wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "engines": {
     "node": ">=20"
@@ -28,12 +34,23 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
+    "vitest": "^3.1.0",
     "wrangler": "^4.0.0"
   },
-  "author": "Piers <piers@mm.st>",
+  "author": "groupthink-dev",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/piersdd/cloudflare-platform-mcp.git"
-  }
+    "url": "https://github.com/groupthink-dev/cloudflare-blade-mcp.git"
+  },
+  "homepage": "https://github.com/groupthink-dev/cloudflare-blade-mcp",
+  "keywords": [
+    "mcp",
+    "cloudflare",
+    "dns",
+    "kv",
+    "d1",
+    "tunnel",
+    "model-context-protocol"
+  ]
 }

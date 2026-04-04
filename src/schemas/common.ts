@@ -40,6 +40,14 @@ export const ZoneIdentifierSchema = z.object({
     .describe("Cloudflare Zone ID (32-char hex). Required unless zone_name is provided."),
 });
 
+/** Account identifier — required for KV, D1, and Tunnel APIs. */
+export const AccountIdSchema = z.object({
+  account_id: z
+    .string()
+    .optional()
+    .describe("Cloudflare Account ID. Falls back to CLOUDFLARE_ACCOUNT_ID env var if not provided."),
+});
+
 /** Random sampling flag. */
 export const SamplingSchema = z.object({
   random_sample: z

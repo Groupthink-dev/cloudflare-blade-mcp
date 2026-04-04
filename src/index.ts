@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cloudflare-dns-mcp-server — Entry point
+ * cloudflare-blade-mcp — Entry point
  *
  * Supports two transport modes:
  *   TRANSPORT=stdio  (default) — for Claude Desktop and local MCP clients
@@ -17,7 +17,7 @@ import { getBearerToken, validateApiKey, validateBearerToken } from "./services/
 // ─── stdio transport ─────────────────────────────────────────────
 
 async function runStdio(): Promise<void> {
-  console.error("cloudflare-dns-mcp-server: starting in stdio mode...");
+  console.error("cloudflare-blade-mcp: starting in stdio mode...");
 
   try {
     const tokenInfo = await validateToken();
@@ -37,7 +37,7 @@ async function runStdio(): Promise<void> {
 
 async function runHttp(): Promise<void> {
   const port = parseInt(process.env.PORT || "8787", 10);
-  console.error(`cloudflare-dns-mcp-server: starting in HTTP mode on port ${port}...`);
+  console.error(`cloudflare-blade-mcp: starting in HTTP mode on port ${port}...`);
 
   try {
     const tokenInfo = await validateToken();
@@ -65,7 +65,7 @@ async function runHttp(): Promise<void> {
   });
 
   // Health check
-  app.get("/health", (c) => c.json({ status: "ok", server: "cloudflare-dns-mcp-server" }));
+  app.get("/health", (c) => c.json({ status: "ok", server: "cloudflare-blade-mcp" }));
 
   // MCP endpoint — Streamable HTTP
   app.post("/mcp", async (c) => {

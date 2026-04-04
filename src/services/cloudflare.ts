@@ -22,6 +22,23 @@ export function getClient(): Cloudflare {
 }
 
 /**
+ * Returns the Cloudflare Account ID, preferring an explicit override
+ * over the CLOUDFLARE_ACCOUNT_ID environment variable.
+ *
+ * KV, D1, and Tunnel APIs all require account_id.
+ */
+export function getAccountId(override?: string): string {
+  const accountId = override || process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId) {
+    throw new Error(
+      "account_id is required. Set CLOUDFLARE_ACCOUNT_ID environment variable " +
+        "or pass account_id as a parameter."
+    );
+  }
+  return accountId;
+}
+
+/**
  * Validates the API token on startup by calling the verify endpoint.
  * Returns the token status or throws with an actionable message.
  */

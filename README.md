@@ -1,206 +1,133 @@
-# cloudflare-dns-mcp-server
+# cloudflare-blade-mcp
 
-A best-of-breed MCP server for Cloudflare DNS management. Designed for extreme token efficiency, full CRUD coverage, and easy deployment as both a local MCP server and a Cloudflare Worker.
+MCP server for the Cloudflare platform — DNS, Workers KV, D1 databases, and Tunnels with token-efficient defaults.
 
-## Features
+## Why this MCP?
 
-- **10 DNS tools** covering zones, records, bulk operations, and BIND export
-- **Token-efficient by default** — concise output strips 60-80% of Cloudflare API bloat
-- **Summary mode** — get record counts + type distribution without fetching individual records
-- **Random sampling** — audit large zones without loading everything
-- **Safety gates** — deletes require explicit `confirm: true`
-- **Dual transport** — stdio for Claude Desktop, Streamable HTTP for remote access
-- **Worker-ready** — deploy to Cloudflare Workers with `npm run deploy`
+| Feature | cloudflare-blade-mcp | Generic CF tools |
+|---------|---------------------|-----------------|
+| Token efficiency | 60-80% fewer tokens via concise mode | Full API responses |
+| Platform coverage | DNS + KV + D1 + Tunnels (31 tools) | DNS only |
+| Safety gates | `confirm: true` on all destructive ops | Varies |
+| Dual transport | stdio + Streamable HTTP | Usually stdio only |
+| Workers deployable | Single codebase → Cloudflare Workers | No |
 
 ## Quick Start
 
-### 1. Create a Cloudflare API Token
-
-Go to [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) and create a token with:
-
-- **Zone → Zone → Read**
-- **Zone → DNS → Edit**
-- Scope: All zones (or specific zones you want to manage)
-
-### 2. Install
-
-```bash
-git clone https://github.com/piersdd/cloudflare-platform-mcp.git
-cd cloudflare-platform-mcp
-npm install
-npm run build
-```
-
-### 3. Configure Claude Desktop
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+### stdio (Claude Desktop / Claude Code)
 
 ```json
 {
   "mcpServers": {
-    "cloudflare-dns": {
+    "cloudflare-blade-mcp": {
       "command": "node",
-      "args": ["/path/to/cloudflare-platform-mcp/dist/index.js"],
+      "args": ["/path/to/cloudflare-blade-mcp/dist/index.js"],
       "env": {
-        "CLOUDFLARE_API_TOKEN": "your-api-token-here"
+        "CLOUDFLARE_API_TOKEN": "your-api-token",
+        "CLOUDFLARE_ACCOUNT_ID": "your-account-id"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. The server validates your token on startup.
+### HTTP (remote access / tunnel)
 
-## Tools
+```bash
+TRANSPORT=http CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=xxx MCP_API_TOKEN=secret node dist/index.js
+```
 
-### Read Tools
+## Tools (31 total)
 
-| Tool | Description |
-|------|-------------|
-| `cf_dns_list_zones` | List zones with optional name/status/account filters |
-| `cf_dns_get_zone` | Get zone by ID or domain name |
-| `cf_dns_list_records` | List records with filters, pagination, summary mode, random sampling |
-| `cf_dns_get_record` | Get a single record by ID |
-| `cf_dns_export_records` | Export zone as BIND zonefile |
+### DNS (10 tools)
 
-### Write Tools
+| Tool | Purpose | R/W |
+|------|---------|-----|
+| `cf_dns_list_zones` | List domains with filtering | R |
+| `cf_dns_get_zone` | Get zone by ID or domain name | R |
+| `cf_dns_list_records` | List/filter/sample DNS records | R |
+| `cf_dns_get_record` | Get a single record | R |
+| `cf_dns_export_records` | Export zone as BIND file | R |
+| `cf_dns_create_record` | Create any DNS record type | W |
+| `cf_dns_update_record` | Partial update (PATCH) | W |
+| `cf_dns_delete_record` | Delete record (confirm required) | W |
+| `cf_dns_bulk_create` | Create up to 100 records | W |
+| `cf_dns_bulk_update` | Update up to 100 records | W |
 
-| Tool | Description |
-|------|-------------|
-| `cf_dns_create_record` | Create any DNS record type (A, AAAA, CNAME, MX, TXT, SRV, CAA, etc.) |
-| `cf_dns_update_record` | Partial update (PATCH) — only changed fields |
-| `cf_dns_delete_record` | Delete with mandatory `confirm: true` safety gate |
-| `cf_dns_bulk_create` | Create up to 100 records in one call |
-| `cf_dns_bulk_update` | Update up to 100 records in one call |
+### Workers KV (7 tools)
+
+| Tool | Purpose | R/W |
+|------|---------|-----|
+| `cf_kv_list_namespaces` | List KV namespaces | R |
+| `cf_kv_list_keys` | List keys with prefix filter + cursor | R |
+| `cf_kv_get` | Read a key's value | R |
+| `cf_kv_put` | Write a key-value pair | W |
+| `cf_kv_delete` | Delete a key (confirm required) | W |
+| `cf_kv_bulk_put` | Write up to 10,000 pairs | W |
+| `cf_kv_bulk_delete` | Delete up to 10,000 keys (confirm required) | W |
+
+### D1 (7 tools)
+
+| Tool | Purpose | R/W |
+|------|---------|-----|
+| `cf_d1_list_databases` | List D1 databases | R |
+| `cf_d1_get_database` | Get database details | R |
+| `cf_d1_query` | Execute read-only SQL | R |
+| `cf_d1_execute` | Execute write SQL (confirm required) | W |
+| `cf_d1_export` | Export all table schemas + row counts | R |
+| `cf_d1_list_tables` | List tables with row counts | R |
+| `cf_d1_describe_table` | Describe table schema (PRAGMA) | R |
+
+### Tunnels (7 tools)
+
+| Tool | Purpose | R/W |
+|------|---------|-----|
+| `cf_tunnel_list` | List tunnels with name filter | R |
+| `cf_tunnel_get` | Get tunnel details | R |
+| `cf_tunnel_create` | Create a new tunnel | W |
+| `cf_tunnel_delete` | Delete a tunnel (confirm required) | W |
+| `cf_tunnel_list_configs` | List tunnel ingress rules | R |
+| `cf_tunnel_update_config` | Update ingress rules (confirm required) | W |
+| `cf_tunnel_list_connections` | List active connections | R |
 
 ## Token Efficiency
 
-Every tool defaults to concise output. Here's what that means:
+All read tools default to **concise mode** — only essential fields are returned. This saves 60-80% of tokens compared to raw Cloudflare API responses.
 
-**Concise (default)** — only the fields an LLM needs:
-```json
-{ "id": "abc123", "type": "A", "name": "www.example.com", "content": "203.0.113.10", "proxied": true, "ttl": "auto" }
-```
-
-**Full Cloudflare response** (with `include_details=true`) — includes zone_id, zone_name, meta, settings, proxiable, locked, etc. ~5x more tokens.
-
-### Efficiency Modes for `cf_dns_list_records`
-
-| Mode | Tokens | Use Case |
-|------|--------|----------|
-| `summary_only=true` | ~50 | "How many records? What types?" |
-| `random_sample=true` | ~200 | "Show me a few records to check" |
-| Filtered + concise | ~500 | "Show me all CNAME records" |
-| Full details | ~2500 | "I need all metadata for debugging" |
-
-## Example Prompts
-
-```
-"List all my Cloudflare zones"
-"Show me the DNS records for example.com"
-"How many DNS records does example.com have, broken down by type?"
-"Create an A record for app.example.com pointing to 203.0.113.10 with proxy enabled"
-"Set up email DNS for example.com with Google Workspace MX records"
-"Switch the A record for api.example.com from 10.0.0.1 to 10.0.0.2"
-"Delete the old staging CNAME record"
-"Export all DNS records for example.com as a BIND file"
-"Audit example.com for unproxied A records that might expose our origin IP"
-```
-
-## HTTP Transport (Remote Access)
-
-Run as an HTTP server instead of stdio:
-
-```bash
-TRANSPORT=http CLOUDFLARE_API_TOKEN=your-token node dist/index.js
-```
-
-The server starts on port 8787 (configurable via `PORT` env var). An API key is auto-generated and printed to stderr on first run. Set `CLOUDFLARE_DNS_MCP_API_KEY` to persist it.
-
-**Endpoints:**
-- `POST /mcp` — MCP Streamable HTTP (requires `X-API-Key` header)
-- `GET /health` — Health check
-
-### Remote MCP Client Config
-
-```json
-{
-  "mcpServers": {
-    "cloudflare-dns": {
-      "url": "http://localhost:8787/mcp",
-      "headers": {
-        "X-API-Key": "your-mcp-api-key"
-      }
-    }
-  }
-}
-```
-
-## Deploy as a Cloudflare Worker
-
-The same codebase deploys to Cloudflare Workers for always-on remote access:
-
-```bash
-# Set secrets
-npx wrangler secret put CLOUDFLARE_API_TOKEN
-npx wrangler secret put CLOUDFLARE_DNS_MCP_API_KEY
-
-# Deploy
-npm run deploy
-```
-
-Your MCP server is now at `https://cloudflare-dns-mcp.your-subdomain.workers.dev/mcp`.
-
-### Public Exposure with Custom Domain
-
-For production use behind a custom domain:
-
-1. Add a custom domain in the Cloudflare dashboard for your Worker
-2. TLS is automatic via Cloudflare's edge certificates
-3. Optionally put it behind Cloudflare Access for SSO authentication
-
-### Bearer Token Authentication
-
-When exposing the server through a tunnel or reverse proxy, set `MCP_API_TOKEN` to require a bearer token on every request:
-
-```bash
-export MCP_API_TOKEN=your-secret-token-here
-```
-
-All HTTP requests must then include the header:
-
-```
-Authorization: Bearer your-secret-token-here
-```
-
-Requests without a valid token receive `401 Unauthorized`. If the env var is **unset or empty**, bearer auth is disabled and the server falls back to the existing `X-API-Key` mechanism (suitable for localhost-only access).
-
-### Via Cloudflare Tunnel
-
-For exposing a local instance:
-
-```bash
-cloudflared tunnel --url http://localhost:8787
-```
+- `concise=true` (default): Minimal fields for decision-making
+- `include_details=true`: Full Cloudflare API response
+- `summary_only=true` (DNS): Count + type distribution only
+- `random_sample=true` (DNS): N random records for quick audits
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CLOUDFLARE_API_TOKEN` | Yes | — | Cloudflare API token with Zone:Read + DNS:Edit |
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `CLOUDFLARE_API_TOKEN` | Yes | — | API token ([create one](https://dash.cloudflare.com/profile/api-tokens)) |
+| `CLOUDFLARE_ACCOUNT_ID` | For KV/D1/Tunnel | — | Account ID ([find it](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/)) |
 | `TRANSPORT` | No | `stdio` | `stdio` or `http` |
-| `PORT` | No | `8787` | HTTP server port (http transport only) |
-| `MCP_API_TOKEN` | No | (none) | Bearer token for HTTP auth — if set, requires `Authorization: Bearer <token>` |
-| `CLOUDFLARE_DNS_MCP_API_KEY` | No | auto-generated | API key for HTTP transport authentication (X-API-Key header) |
+| `PORT` | No | `8787` | HTTP server port |
+| `MCP_API_TOKEN` | No | — | Bearer token for HTTP auth |
+
+## API Token Permissions
+
+Create a token at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) with:
+
+- **Zone → DNS → Edit** (for DNS tools)
+- **Account → Workers KV Storage → Edit** (for KV tools)
+- **Account → D1 → Edit** (for D1 tools)
+- **Account → Cloudflare Tunnel → Edit** (for Tunnel tools)
+- **Account → Account Settings → Read** (for account verification)
 
 ## Development
 
 ```bash
-npm run dev          # stdio mode with auto-reload
-npm run dev:http     # HTTP mode with auto-reload
-npm run build        # Compile TypeScript
-npm run typecheck    # Type-check without emitting
-npm run deploy       # Build + deploy to Workers
+npm install
+npm run dev          # stdio with hot-reload
+npm run dev:http     # HTTP with hot-reload
+npm test             # run tests
+npm run typecheck    # type-check only
+npm run build        # compile to dist/
 ```
 
 ## License
