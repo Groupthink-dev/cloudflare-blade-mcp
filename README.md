@@ -218,7 +218,7 @@ npm run build            # compile to dist/
 
 ## Sidereal Marketplace
 
-This MCP conforms to the `cloudflare-v1` service contract (31/31 operations) across four service domains: `dns`, `kv`, `d1`, `tunnel`.
+This MCP conforms to the `edge-platform-v1` service contract (31/31 operations) across four service domains: `dns`, `kv`, `d1`, `tunnel`.
 
 See `sidereal-plugin.yaml` for the full plugin manifest.
 
