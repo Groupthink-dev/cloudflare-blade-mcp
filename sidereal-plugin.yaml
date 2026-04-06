@@ -55,11 +55,13 @@ setup:
       secret: true
       required: true
       placeholder: "Create at dash.cloudflare.com/profile/api-tokens"
+      help: "Use a scoped API token (not global key). Needs Zone:Read, DNS:Edit at minimum."
     - key: CLOUDFLARE_ACCOUNT_ID
       label: "Account ID"
       secret: false
       required: true
       placeholder: "32-char hex from dashboard overview"
+      help: "Found on the domain overview page in the Cloudflare dashboard"
   test:
     endpoint: "https://api.cloudflare.com/client/v4/user/tokens/verify"
     auth_style: bearer
