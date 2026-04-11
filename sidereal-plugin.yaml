@@ -1,11 +1,11 @@
 name: cloudflare-blade-mcp
-version: "0.1.0"
-description: "Cloudflare platform MCP — DNS, KV, D1, Tunnels with token-efficient defaults"
+version: "0.2.0"
+description: "Manage your Cloudflare stack — DNS, Workers, Pages, R2, KV, D1, Tunnels, and cache purge. 53 tools with token-efficient output and safety gates on all writes."
 author: groupthink-dev
 licence: MIT
 tier: certified
 homepage: https://github.com/groupthink-dev/cloudflare-blade-mcp
-contract: edge-platform-v1
+contract: edge-platform-v2
 
 services:
   dns:
@@ -43,10 +43,36 @@ services:
     list_configs: cf_tunnel_list_configs
     update_config: cf_tunnel_update_config
     list_connections: cf_tunnel_list_connections
+  workers:
+    list_scripts: cf_workers_list_scripts
+    get_script: cf_workers_get_script
+    list_deployments: cf_workers_list_deployments
+    create_deployment: cf_workers_create_deployment
+    list_versions: cf_workers_list_versions
+    list_secrets: cf_workers_list_secrets
+    put_secret: cf_workers_put_secret
+    delete_secret: cf_workers_delete_secret
+    get_schedules: cf_workers_get_schedules
+    put_schedules: cf_workers_put_schedules
+  pages:
+    list_projects: cf_pages_list_projects
+    get_project: cf_pages_get_project
+    list_deployments: cf_pages_list_deployments
+    get_deployment: cf_pages_get_deployment
+    rollback: cf_pages_rollback
+    list_domains: cf_pages_list_domains
+    purge_build_cache: cf_pages_purge_build_cache
+  r2:
+    list_buckets: cf_r2_list_buckets
+    get_bucket: cf_r2_get_bucket
+    create_bucket: cf_r2_create_bucket
+    delete_bucket: cf_r2_delete_bucket
+  cache:
+    purge: cf_cache_purge
 
 setup:
   icon: "☁️"
-  blurb: "Manage Cloudflare DNS, Workers KV, D1 databases, and Tunnels"
+  blurb: "Manage Cloudflare DNS, KV, D1, Tunnels, Workers, Pages, R2, and Cache"
   auth_model: api_key
   complexity: moderate
   fields:
@@ -82,7 +108,7 @@ env:
     description: "Cloudflare API token with appropriate permissions"
     secret: true
   - name: CLOUDFLARE_ACCOUNT_ID
-    description: "Cloudflare Account ID (required for KV, D1, Tunnel tools)"
+    description: "Cloudflare Account ID (required for KV, D1, Tunnel, Workers, Pages, R2 tools)"
     secret: false
   - name: MCP_API_TOKEN
     description: "Bearer token for HTTP transport authentication"
@@ -97,5 +123,5 @@ requires:
   sidereal: ">=0.40"
 
 conformance:
-  required: "31/31"
-  last_tested: "2026-04-04"
+  required: "53/53"
+  last_tested: "2026-04-11"

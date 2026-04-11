@@ -1,9 +1,9 @@
 ---
 name: cloudflare-blade
 description: >
-  Manage the Cloudflare platform — DNS records, Workers KV, D1 databases, and
-  Tunnels with extreme token efficiency. 31 tools across 4 domains.
-version: 0.1.0
+  Manage the Cloudflare platform — DNS, Workers KV, D1, Tunnels, Workers,
+  Pages, R2, and Cache with extreme token efficiency. 53 tools across 8 domains.
+version: 0.2.0
 author: groupthink-dev
 triggers:
   - DNS
@@ -40,6 +40,23 @@ triggers:
   - cloudflared
   - ingress
   - tunnel config
+  - Workers
+  - Worker script
+  - Worker deployment
+  - Worker secret
+  - cron trigger
+  - Worker version
+  - Pages
+  - Pages project
+  - Pages deployment
+  - Pages rollback
+  - Pages domain
+  - R2
+  - R2 bucket
+  - object storage
+  - cache purge
+  - purge cache
+  - CDN cache
 ---
 
 # Cloudflare Blade MCP — LLM Skill Guide
@@ -128,3 +145,45 @@ cf_d1_query database_id="<db_id>" sql="SELECT * FROM users LIMIT 10"
 | `cf_tunnel_list_configs` | List ingress rules | Reviewing routing |
 | `cf_tunnel_update_config` | Update ingress rules | Changing routing |
 | `cf_tunnel_list_connections` | List connections | Checking connector health |
+
+### Workers Tools (10)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_workers_list_scripts` | List all scripts | Finding script names |
+| `cf_workers_get_script` | Get script metadata | Settings, schedules, deployment |
+| `cf_workers_list_deployments` | List deployments | Version routing history |
+| `cf_workers_create_deployment` | Deploy versions | Rollouts, gradual traffic splits |
+| `cf_workers_list_versions` | List versions | Finding version IDs for deploy |
+| `cf_workers_list_secrets` | List secret names | Auditing bindings |
+| `cf_workers_put_secret` | Set/update secret | Rotating credentials |
+| `cf_workers_delete_secret` | Delete secret | Removing stale bindings |
+| `cf_workers_get_schedules` | Get cron triggers | Viewing scheduled runs |
+| `cf_workers_put_schedules` | Set cron triggers | Changing scheduled runs |
+
+### Pages Tools (7)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_pages_list_projects` | List projects | Finding project names |
+| `cf_pages_get_project` | Get project details | Build config, latest deploy |
+| `cf_pages_list_deployments` | List deployments | Deployment history |
+| `cf_pages_get_deployment` | Get deployment | Build stages, trigger info |
+| `cf_pages_rollback` | Rollback production | Reverting broken deploys |
+| `cf_pages_list_domains` | List custom domains | Domain verification status |
+| `cf_pages_purge_build_cache` | Purge build cache | Fixing stale builds |
+
+### R2 Tools (4)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_r2_list_buckets` | List buckets | Finding bucket names |
+| `cf_r2_get_bucket` | Get bucket details | Location, storage class |
+| `cf_r2_create_bucket` | Create bucket | Setting up new storage |
+| `cf_r2_delete_bucket` | Delete bucket | Decommissioning |
+
+### Cache Tools (1)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_cache_purge` | Purge cache | URLs, tags, hosts, prefixes, or everything |
