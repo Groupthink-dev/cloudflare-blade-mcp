@@ -1,5 +1,5 @@
 name: cloudflare-blade-mcp
-version: "0.2.0"
+version: "0.2.1"
 description: "Manage your Cloudflare stack — DNS, Workers, Pages, R2, KV, D1, Tunnels, and cache purge. 53 tools with token-efficient output and safety gates on all writes."
 author: groupthink-dev
 licence: MIT
