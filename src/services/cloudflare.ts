@@ -17,7 +17,7 @@ export function getClient(): Cloudflare {
     );
   }
 
-  _client = new Cloudflare({ apiToken });
+  _client = new Cloudflare({ apiToken, timeout: 15_000, maxRetries: 1 });
   return _client;
 }
 
