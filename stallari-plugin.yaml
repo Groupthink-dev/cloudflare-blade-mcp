@@ -1,74 +1,110 @@
 name: cloudflare-blade-mcp
-version: "0.2.1"
+version: "0.3.0"
 description: "Manage your Cloudflare stack — DNS, Workers, Pages, R2, KV, D1, Tunnels, and cache purge. 53 tools with token-efficient output and safety gates on all writes."
 author: groupthink-dev
 license: MIT
 tier: certified
 homepage: https://github.com/groupthink-dev/cloudflare-blade-mcp
-contract: edge-platform-v2
+
+# DD-181 Wave 2: edge-platform-v1/v2 was retired in pack-spec 2.0.0. Cloudflare
+# blade now declares the four decomposed contracts directly. D1, Tunnels, Pages,
+# and Cache are not covered by a v1 contract yet — exposed as native tools.
+contract:
+  - dns-authoritative-v1
+  - object-storage-v1
+  - kv-v1
+  - functions-v1
 
 services:
   dns:
-    list_zones: cf_dns_list_zones
-    get_zone: cf_dns_get_zone
-    list_records: cf_dns_list_records
-    get_record: cf_dns_get_record
-    export_records: cf_dns_export_records
-    create_record: cf_dns_create_record
-    update_record: cf_dns_update_record
-    delete_record: cf_dns_delete_record
-    bulk_create: cf_dns_bulk_create
-    bulk_update: cf_dns_bulk_update
+    record_list: cf_dns_list_records
+    record_create: cf_dns_create_record
+    record_update: cf_dns_update_record
+    record_delete: cf_dns_delete_record
+    record_get: cf_dns_get_record
+    zone_list: cf_dns_list_zones
+    zone_get: cf_dns_get_zone
+    record_bulk_create: cf_dns_bulk_create
+    record_bulk_update: cf_dns_bulk_update
+  object_storage:
+    bucket_list: cf_r2_list_buckets
+    bucket_get: cf_r2_get_bucket
+    bucket_create: cf_r2_create_bucket
+    bucket_delete: cf_r2_delete_bucket
   kv:
-    list_namespaces: cf_kv_list_namespaces
-    list_keys: cf_kv_list_keys
-    get: cf_kv_get
-    put: cf_kv_put
-    delete: cf_kv_delete
+    key_get: cf_kv_get
+    key_put: cf_kv_put
+    key_delete: cf_kv_delete
+    namespace_list: cf_kv_list_namespaces
+    key_list: cf_kv_list_keys
     bulk_put: cf_kv_bulk_put
     bulk_delete: cf_kv_bulk_delete
-  d1:
-    list_databases: cf_d1_list_databases
-    get_database: cf_d1_get_database
-    query: cf_d1_query
-    execute: cf_d1_execute
-    export: cf_d1_export
-    list_tables: cf_d1_list_tables
-    describe_table: cf_d1_describe_table
-  tunnel:
-    list: cf_tunnel_list
-    get: cf_tunnel_get
-    create: cf_tunnel_create
-    delete: cf_tunnel_delete
-    list_configs: cf_tunnel_list_configs
-    update_config: cf_tunnel_update_config
-    list_connections: cf_tunnel_list_connections
-  workers:
-    list_scripts: cf_workers_list_scripts
-    get_script: cf_workers_get_script
-    list_deployments: cf_workers_list_deployments
-    create_deployment: cf_workers_create_deployment
-    list_versions: cf_workers_list_versions
-    list_secrets: cf_workers_list_secrets
-    put_secret: cf_workers_put_secret
-    delete_secret: cf_workers_delete_secret
-    get_schedules: cf_workers_get_schedules
-    put_schedules: cf_workers_put_schedules
-  pages:
-    list_projects: cf_pages_list_projects
-    get_project: cf_pages_get_project
-    list_deployments: cf_pages_list_deployments
-    get_deployment: cf_pages_get_deployment
-    rollback: cf_pages_rollback
-    list_domains: cf_pages_list_domains
-    purge_build_cache: cf_pages_purge_build_cache
-  r2:
-    list_buckets: cf_r2_list_buckets
-    get_bucket: cf_r2_get_bucket
-    create_bucket: cf_r2_create_bucket
-    delete_bucket: cf_r2_delete_bucket
-  cache:
-    purge: cf_cache_purge
+  functions:
+    script_list: cf_workers_list_scripts
+    script_get: cf_workers_get_script
+    script_deploy: cf_workers_create_deployment
+    schedule_list: cf_workers_get_schedules
+    secret_list: cf_workers_list_secrets
+    schedule_set: cf_workers_put_schedules
+    version_list: cf_workers_list_versions
+    secret_put: cf_workers_put_secret
+    secret_delete: cf_workers_delete_secret
+
+# Operations the blade does not implement. These are deliberate gaps — either
+# the upstream Cloudflare API does not expose them, or they require dashboard
+# operations beyond the scope of an MCP blade.
+not_supported:
+  dns-authoritative-v1:
+    - domain_check_availability  # not exposed by Cloudflare API
+    - nameserver_set              # zone-level dashboard operation
+    - zone_create                 # provisioning lives in dashboard
+    - zone_delete                 # provisioning lives in dashboard
+  object-storage-v1:
+    - object_list                 # R2 object-level ops not yet implemented
+    - object_get
+    - object_put
+    - object_delete
+    - object_head
+    - object_copy
+    - presign_get
+    - presign_put
+    - object_set_metadata
+    - object_bulk_delete
+    - object_bulk_put
+  functions-v1:
+    - script_delete               # not exposed via current toolset
+    - tail                        # log tail not implemented
+    - recent_logs
+    - version_rollback            # gated dashboard operation
+    - invoke                      # test invocation not exposed
+
+# Native tools not covered by any v1 contract. D1, Tunnels, Pages, and Cache
+# are exposed directly without a service contract.
+native_tools:
+  - cf_dns_export_records
+  - cf_d1_list_databases
+  - cf_d1_get_database
+  - cf_d1_query
+  - cf_d1_execute
+  - cf_d1_export
+  - cf_d1_list_tables
+  - cf_d1_describe_table
+  - cf_tunnel_list
+  - cf_tunnel_get
+  - cf_tunnel_create
+  - cf_tunnel_delete
+  - cf_tunnel_list_configs
+  - cf_tunnel_update_config
+  - cf_tunnel_list_connections
+  - cf_workers_list_deployments
+  - cf_pages_list_projects
+  - cf_pages_get_project
+  - cf_pages_list_deployments
+  - cf_pages_get_deployment
+  - cf_pages_rollback
+  - cf_pages_list_domains
+  - cf_pages_purge_build_cache
+  - cf_cache_purge
 
 setup:
   icon: "☁️"
@@ -120,8 +156,27 @@ env:
     default: "stdio"
 
 requires:
-  sidereal: ">=0.40"
+  stallari: ">=0.73.4"
 
 conformance:
-  required: "53/53"
-  last_tested: "2026-04-11"
+  dns-authoritative-v1:
+    required: "4/4"
+    recommended: "3/3"
+    optional: "2/3"
+    gated: "0/3"
+  object-storage-v1:
+    required: "1/5"
+    recommended: "1/4"
+    optional: "0/3"
+    gated: "2/3"
+  kv-v1:
+    required: "3/3"
+    recommended: "2/2"
+    optional: "1/1"
+    gated: "1/1"
+  functions-v1:
+    required: "4/4"
+    recommended: "3/4"
+    optional: "1/3"
+    gated: "1/3"
+  last_tested: "2026-04-28"
