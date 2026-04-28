@@ -51,9 +51,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/groupthink-dev/cloudflare-blade-mcp.git"
+    "url": "https://github.com/Groupthink-dev/cloudflare-blade-mcp.git"
   },
-  "homepage": "https://github.com/groupthink-dev/cloudflare-blade-mcp",
+  "homepage": "https://github.com/Groupthink-dev/cloudflare-blade-mcp",
   "keywords": [
     "mcp",
     "cloudflare",
