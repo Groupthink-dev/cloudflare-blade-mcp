@@ -53,30 +53,30 @@ services:
 # Operations the blade does not implement. These are deliberate gaps — either
 # the upstream Cloudflare API does not expose them, or they require dashboard
 # operations beyond the scope of an MCP blade.
+# dns-authoritative-v1: domain_check_availability, nameserver_set, zone_create, zone_delete
+# object-storage-v1: object_list/get/put/delete/head/copy, presign_get/put, object_set_metadata, object_bulk_delete/put
+# functions-v1: script_delete, tail, recent_logs, version_rollback, invoke
 not_supported:
-  dns-authoritative-v1:
-    - domain_check_availability  # not exposed by Cloudflare API
-    - nameserver_set              # zone-level dashboard operation
-    - zone_create                 # provisioning lives in dashboard
-    - zone_delete                 # provisioning lives in dashboard
-  object-storage-v1:
-    - object_list                 # R2 object-level ops not yet implemented
-    - object_get
-    - object_put
-    - object_delete
-    - object_head
-    - object_copy
-    - presign_get
-    - presign_put
-    - object_set_metadata
-    - object_bulk_delete
-    - object_bulk_put
-  functions-v1:
-    - script_delete               # not exposed via current toolset
-    - tail                        # log tail not implemented
-    - recent_logs
-    - version_rollback            # gated dashboard operation
-    - invoke                      # test invocation not exposed
+  - domain_check_availability
+  - nameserver_set
+  - zone_create
+  - zone_delete
+  - object_list
+  - object_get
+  - object_put
+  - object_delete
+  - object_head
+  - object_copy
+  - presign_get
+  - presign_put
+  - object_set_metadata
+  - object_bulk_delete
+  - object_bulk_put
+  - script_delete
+  - tail
+  - recent_logs
+  - version_rollback
+  - invoke
 
 # Native tools not covered by any v1 contract. D1, Tunnels, Pages, and Cache
 # are exposed directly without a service contract.
@@ -164,19 +164,22 @@ conformance:
     recommended: "3/3"
     optional: "2/3"
     gated: "0/3"
+    last_tested: "2026-04-28"
   object-storage-v1:
     required: "1/5"
     recommended: "1/4"
     optional: "0/3"
     gated: "2/3"
+    last_tested: "2026-04-28"
   kv-v1:
     required: "3/3"
     recommended: "2/2"
     optional: "1/1"
     gated: "1/1"
+    last_tested: "2026-04-28"
   functions-v1:
     required: "4/4"
     recommended: "3/4"
     optional: "1/3"
     gated: "1/3"
-  last_tested: "2026-04-28"
+    last_tested: "2026-04-28"
