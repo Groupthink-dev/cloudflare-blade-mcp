@@ -138,6 +138,11 @@ install:
   runtime: node
   package: cloudflare-blade-mcp
   command: cloudflare-blade-mcp
+  # DD-242 Phase C: this binary also offers a Streamable-HTTP mode (TRANSPORT=http,
+  # Hono-based, bearer-token gated) for non-Stallari consumers — primarily Cloudflare
+  # Workers / external MCP clients. The Stallari harness still spawns it via stdio
+  # and scrubs MCP_TRANSPORT/HOST/PORT/AUTH_TOKEN at spawn (DD-242 Phase A).
+  network_transport: ["http"]
 
 env:
   - name: CLOUDFLARE_API_TOKEN
