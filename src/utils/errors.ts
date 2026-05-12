@@ -27,7 +27,8 @@ export function handleApiError(error: unknown): string {
   }
 
   if (error instanceof Cloudflare.APIConnectionError) {
-    return `Error: Could not connect to Cloudflare API. Check network connectivity.`;
+    const cause = error.cause instanceof Error ? ` (${error.cause.message})` : "";
+    return `Error: Could not connect to Cloudflare API${cause}. Retried once — check network connectivity.`;
   }
 
   if (error instanceof Cloudflare.RateLimitError) {

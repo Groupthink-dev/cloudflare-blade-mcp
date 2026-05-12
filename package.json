@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-blade-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cloudflare platform MCP server — DNS, KV, D1, Tunnels, Workers, Pages, R2, Cache with token-efficient defaults",
   "type": "module",
   "main": "dist/index.js",
@@ -8,7 +8,7 @@
     "cloudflare-blade-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "dev:http": "TRANSPORT=http tsx watch src/index.ts",
@@ -17,7 +17,17 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "engines": {
     "node": ">=20"
@@ -41,9 +51,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/groupthink-dev/cloudflare-blade-mcp.git"
+    "url": "https://github.com/Groupthink-dev/cloudflare-blade-mcp.git"
   },
-  "homepage": "https://github.com/groupthink-dev/cloudflare-blade-mcp",
+  "homepage": "https://github.com/Groupthink-dev/cloudflare-blade-mcp",
   "keywords": [
     "mcp",
     "cloudflare",

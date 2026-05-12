@@ -266,11 +266,11 @@ npm run typecheck        # type-check only
 npm run build            # compile to dist/
 ```
 
-## Sidereal Marketplace
+## Stallari Marketplace
 
 This MCP conforms to the `edge-platform-v2` service contract (53/53 operations) across eight service domains: `dns`, `kv`, `d1`, `tunnel`, `workers`, `pages`, `r2`, `cache`.
 
-See `sidereal-plugin.yaml` for the full plugin manifest.
+See `stallari-plugin.yaml` for the full plugin manifest.
 
 ## License
 
