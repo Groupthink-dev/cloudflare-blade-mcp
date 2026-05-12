@@ -163,6 +163,8 @@ env:
 requires:
   stallari: ">=0.73.4"
 
+  adapter_contracts:
+    - "dns_authoritative >= 1.0"
 conformance:
   dns-authoritative-v1:
     required: "4/4"
