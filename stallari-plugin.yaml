@@ -5,9 +5,29 @@ author: groupthink-dev
 licence: MIT
 tier: certified
 homepage: https://github.com/groupthink-dev/cloudflare-blade-mcp
-contract: edge-platform-v2
+contract:
+  - edge-platform-v2
+  - dns-authoritative-v1
 
 services:
+  # Canonical dns-authoritative-v1 axis (added 2026-05-13 for DD-276 B.5c).
+  # Maps the contract's Required ops to existing cf_dns_* tools.
+  dns_authoritative:
+    record_list: cf_dns_list_records
+    record_create: cf_dns_create_record
+    record_update: cf_dns_update_record
+    record_delete: cf_dns_delete_record
+    # Recommended
+    record_get: cf_dns_get_record
+    zone_list: cf_dns_list_zones
+    zone_get: cf_dns_get_zone
+    # Optional
+    record_bulk_create: cf_dns_bulk_create
+    record_bulk_update: cf_dns_bulk_update
+
+  # Vendor-native DNS axis (legacy edge-platform-v2 surface — preserved for
+  # callers that consume this blade directly outside the dns-authoritative-v1
+  # adapter). Same tools, vendor-native key names.
   dns:
     list_zones: cf_dns_list_zones
     get_zone: cf_dns_get_zone
