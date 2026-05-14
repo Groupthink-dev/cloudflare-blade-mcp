@@ -27,6 +27,41 @@ export const GetDatabaseSchema = AccountIdSchema.extend({
 
 export type GetDatabaseInput = z.infer<typeof GetDatabaseSchema>;
 
+// ─── Create / Delete Database ────────────────────────────────────
+
+export const CreateDatabaseSchema = AccountIdSchema.extend({
+  name: z
+    .string()
+    .min(1)
+    .describe("Name for the new D1 database."),
+  jurisdiction: z
+    .string()
+    .optional()
+    .describe("Optional jurisdiction setting supported by Cloudflare D1."),
+  primary_location_hint: z
+    .string()
+    .optional()
+    .describe("Optional D1 primary location hint."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to create a database."),
+}).strict();
+
+export type CreateDatabaseInput = z.infer<typeof CreateDatabaseSchema>;
+
+export const DeleteDatabaseSchema = AccountIdSchema.extend({
+  database_id: z.string().describe("D1 database UUID."),
+  name: z
+    .string()
+    .min(1)
+    .describe("Exact database name. Used to verify the database before deletion."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to permanently delete the database."),
+}).strict();
+
+export type DeleteDatabaseInput = z.infer<typeof DeleteDatabaseSchema>;
+
 // ─── Query (read-only) ────────────────────────────────────────────
 
 export const QuerySchema = AccountIdSchema.extend({

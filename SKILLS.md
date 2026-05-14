@@ -2,8 +2,9 @@
 name: cloudflare-blade
 description: >
   Manage the Cloudflare platform — DNS, Workers KV, D1, Tunnels, Workers,
-  Pages, R2, and Cache with extreme token efficiency. 53 tools across 8 domains.
-version: 0.2.0
+  Pages, R2, Vectorize, AI Search, AI Gateway, Workers AI, and Cache with
+  extreme token efficiency. 78 tools across 10 domains.
+version: 0.3.0
 author: groupthink-dev
 triggers:
   - DNS
@@ -54,6 +55,13 @@ triggers:
   - R2
   - R2 bucket
   - object storage
+  - Vectorize
+  - vector index
+  - AI Search
+  - AutoRAG
+  - AI Gateway
+  - Workers AI
+  - model inference
   - cache purge
   - purge cache
   - CDN cache
@@ -72,7 +80,7 @@ triggers:
 7. **Prefer `cf_kv_list_keys` with `prefix`** over listing all keys in large namespaces.
 8. **Prefer `cf_d1_query`** over `cf_d1_execute` for read operations — it communicates read-only intent.
 9. **Use bulk operations** (`cf_kv_bulk_put`, `cf_dns_bulk_create`) when writing multiple items.
-10. **Account ID**: Set `CLOUDFLARE_ACCOUNT_ID` env var to avoid passing it on every KV/D1/Tunnel call.
+10. **Account ID**: Set `CLOUDFLARE_ACCOUNT_ID` env var to avoid passing it on every account-level call.
 
 ## Quick Start — 5 Most Common Operations
 
@@ -110,11 +118,13 @@ cf_d1_query database_id="<db_id>" sql="SELECT * FROM users LIMIT 10"
 | `cf_dns_bulk_create` | Create many (max 100) | Migrations, initial setup |
 | `cf_dns_bulk_update` | Update many (max 100) | Mass TTL/proxy changes |
 
-### KV Tools (7)
+### KV Tools (9)
 
 | Tool | Purpose | Best for |
 |------|---------|----------|
 | `cf_kv_list_namespaces` | List namespaces | Finding namespace IDs |
+| `cf_kv_create_namespace` | Create namespace | New app storage |
+| `cf_kv_delete_namespace` | Delete namespace | Decommissioning |
 | `cf_kv_list_keys` | List keys | Browsing, prefix search |
 | `cf_kv_get` | Read value | Inspecting config/data |
 | `cf_kv_put` | Write value | Setting config, caching |
@@ -122,12 +132,14 @@ cf_d1_query database_id="<db_id>" sql="SELECT * FROM users LIMIT 10"
 | `cf_kv_bulk_put` | Write many (max 10k) | Data loading, migrations |
 | `cf_kv_bulk_delete` | Delete many (max 10k) | Namespace cleanup |
 
-### D1 Tools (7)
+### D1 Tools (9)
 
 | Tool | Purpose | Best for |
 |------|---------|----------|
 | `cf_d1_list_databases` | List databases | Finding database IDs |
 | `cf_d1_get_database` | Get database details | Checking size, table count |
+| `cf_d1_create_database` | Create database | New app database |
+| `cf_d1_delete_database` | Delete database | Decommissioning |
 | `cf_d1_query` | Read-only SQL | SELECT queries |
 | `cf_d1_execute` | Write SQL | INSERT, UPDATE, DELETE, DDL |
 | `cf_d1_export` | Export schemas | Understanding DB structure |
@@ -146,12 +158,15 @@ cf_d1_query database_id="<db_id>" sql="SELECT * FROM users LIMIT 10"
 | `cf_tunnel_update_config` | Update ingress rules | Changing routing |
 | `cf_tunnel_list_connections` | List connections | Checking connector health |
 
-### Workers Tools (10)
+### Workers Tools (13)
 
 | Tool | Purpose | Best for |
 |------|---------|----------|
 | `cf_workers_list_scripts` | List all scripts | Finding script names |
 | `cf_workers_get_script` | Get script metadata | Settings, schedules, deployment |
+| `cf_workers_get_settings` | Get settings | Inspecting bindings |
+| `cf_workers_upsert_binding` | Upsert binding | Wiring KV/D1/R2/Vectorize/AI |
+| `cf_workers_delete_binding` | Delete binding | Removing stale bindings |
 | `cf_workers_list_deployments` | List deployments | Version routing history |
 | `cf_workers_create_deployment` | Deploy versions | Rollouts, gradual traffic splits |
 | `cf_workers_list_versions` | List versions | Finding version IDs for deploy |
@@ -181,6 +196,34 @@ cf_d1_query database_id="<db_id>" sql="SELECT * FROM users LIMIT 10"
 | `cf_r2_get_bucket` | Get bucket details | Location, storage class |
 | `cf_r2_create_bucket` | Create bucket | Setting up new storage |
 | `cf_r2_delete_bucket` | Delete bucket | Decommissioning |
+
+### Vectorize Tools (8)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_vectorize_list_indexes` | List indexes | Finding index names |
+| `cf_vectorize_get_index` | Get index | Checking configuration |
+| `cf_vectorize_get_index_info` | Get index info | Operational checks |
+| `cf_vectorize_create_index` | Create index | New semantic search store |
+| `cf_vectorize_delete_index` | Delete index | Decommissioning |
+| `cf_vectorize_list_metadata_indexes` | List metadata indexes | Filter audit |
+| `cf_vectorize_create_metadata_index` | Create metadata index | Enabling filters |
+| `cf_vectorize_delete_metadata_index` | Delete metadata index | Removing filters |
+
+### AI Tools (10)
+
+| Tool | Purpose | Best for |
+|------|---------|----------|
+| `cf_ai_search_query` | Query AI Search | RAG retrieval |
+| `cf_ai_gateway_list_gateways` | List gateways | Finding gateway IDs |
+| `cf_ai_gateway_get_gateway` | Get gateway | Config inspection |
+| `cf_ai_gateway_create_gateway` | Create gateway | New AI route |
+| `cf_ai_gateway_update_gateway` | Update gateway | Config changes |
+| `cf_ai_gateway_delete_gateway` | Delete gateway | Decommissioning |
+| `cf_ai_gateway_list_logs` | List logs | Observability |
+| `cf_ai_gateway_get_log` | Get log | Request debugging |
+| `cf_workers_ai_list_models` | Search models | Model selection |
+| `cf_workers_ai_run_model` | Run model | Diagnostics, embeddings, inference |
 
 ### Cache Tools (1)
 

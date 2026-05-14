@@ -14,6 +14,50 @@ export const GetScriptSchema = AccountIdSchema.extend({
 }).strict();
 export type GetScriptInput = z.infer<typeof GetScriptSchema>;
 
+// ─── Settings / Bindings ─────────────────────────────────────────
+
+export const GetSettingsSchema = AccountIdSchema.extend({
+  script_name: z
+    .string()
+    .min(1)
+    .describe("Worker script name."),
+}).strict();
+export type GetSettingsInput = z.infer<typeof GetSettingsSchema>;
+
+export const WorkerBindingSchema = z
+  .object({
+    name: z.string().min(1).describe("Binding variable name."),
+    type: z.string().min(1).describe("Cloudflare binding type."),
+  })
+  .catchall(z.unknown());
+
+export const UpsertBindingSchema = AccountIdSchema.extend({
+  script_name: z
+    .string()
+    .min(1)
+    .describe("Worker script name."),
+  binding: WorkerBindingSchema.describe("Complete binding object to insert or replace by name."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to update Worker bindings."),
+}).strict();
+export type UpsertBindingInput = z.infer<typeof UpsertBindingSchema>;
+
+export const DeleteBindingSchema = AccountIdSchema.extend({
+  script_name: z
+    .string()
+    .min(1)
+    .describe("Worker script name."),
+  binding_name: z
+    .string()
+    .min(1)
+    .describe("Binding variable name to remove."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to update Worker bindings."),
+}).strict();
+export type DeleteBindingInput = z.infer<typeof DeleteBindingSchema>;
+
 // ─── Deployments ──────────────────────────────────────────────────
 
 export const ListDeploymentsSchema = AccountIdSchema.extend({

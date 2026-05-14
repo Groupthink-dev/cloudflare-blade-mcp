@@ -1,13 +1,13 @@
 # Cloudflare Blade MCP
 
-A token-efficient MCP server for the Cloudflare platform. 53 tools across DNS, Workers KV, D1, Tunnels, Workers, Pages, R2, and Cache — with safety gates on every destructive operation.
+A token-efficient MCP server for the Cloudflare platform. 78 tools across DNS, Workers KV, D1, Tunnels, Workers, Pages, R2, Vectorize, AI Search, AI Gateway, Workers AI, and Cache — with safety gates on every destructive operation.
 
 ## Why another Cloudflare MCP?
 
 | | Official CF MCP | mcp-cloudflare | **This** |
 |---|---|---|---|
-| **Scope** | Workers/KV/R2/D1 (no DNS) | DNS + Workers + KV | DNS + KV + D1 + Tunnels + Workers + Pages + R2 + Cache |
-| **Tools** | 12 | 14 | 53 (targeted) |
+| **Scope** | Workers/KV/R2/D1 (no DNS) | DNS + Workers + KV | DNS + KV + D1 + Tunnels + Workers + Pages + R2 + Vectorize + AI + Cache |
+| **Tools** | 12 | 14 | 78 (targeted) |
 | **Token cost** | Full API responses | Full API responses | 60-80% savings via concise mode |
 | **Write safety** | None | None | Confirm gates on all destructive ops |
 | **Transport** | stdio only | stdio only | stdio + Streamable HTTP |
@@ -16,7 +16,7 @@ A token-efficient MCP server for the Cloudflare platform. 53 tools across DNS, W
 **The official Cloudflare MCP** (`cloudflare/mcp-server-cloudflare`) covers Workers, KV, R2, and D1 but has no DNS tools — one of the most common Cloudflare management tasks. Its responses return full Cloudflare API payloads, exhausting token budgets on large zones.
 
 **This MCP** is designed for agentic platforms that need:
-- **Broad platform coverage** — DNS, KV, D1, Tunnels, Workers, Pages, R2, and Cache from a single server.
+- **Broad platform coverage** — DNS, KV, D1, Tunnels, Workers, Pages, R2, Vectorize, AI Search, AI Gateway, Workers AI, and Cache from a single server.
 - **Token discipline** — concise mode strips 60-80% of response payload by default. Summary and random-sample modes for large zones.
 - **Safe writes** — every delete, bulk operation, and config replacement requires explicit `confirm: true`.
 - **Flexible deployment** — stdio for local clients, Streamable HTTP for remote access, Cloudflare Workers for always-on.
@@ -38,7 +38,7 @@ npm install && npm run build
 # Required — create at dash.cloudflare.com/profile/api-tokens
 export CLOUDFLARE_API_TOKEN="your-api-token"
 
-# Required for KV, D1, and Tunnel tools
+# Required for account-level tools (KV, D1, Tunnel, Workers, Pages, R2, Vectorize, AI)
 export CLOUDFLARE_ACCOUNT_ID="your-account-id"
 ```
 
@@ -50,6 +50,10 @@ export CLOUDFLARE_ACCOUNT_ID="your-account-id"
 - **Account > Workers Scripts > Edit** — Workers tools
 - **Account > Cloudflare Pages > Edit** — Pages tools
 - **Account > R2 > Edit** — R2 tools
+- **Account > Vectorize > Edit** — Vectorize tools
+- **Account > AI Search > Read/Edit** — AI Search tools
+- **Account > AI Gateway > Read/Edit** — AI Gateway tools
+- **Account > Workers AI > Read/Write** — Workers AI tools
 - **Zone > Cache Purge > Purge** — Cache tools
 
 You can scope the token to only the services you need. DNS-only users don't need account-level permissions.
@@ -81,7 +85,7 @@ TRANSPORT=http MCP_API_TOKEN=your-secret node dist/index.js
 }
 ```
 
-## Tools (53)
+## Tools (78)
 
 ### DNS (10 tools)
 
@@ -98,11 +102,13 @@ TRANSPORT=http MCP_API_TOKEN=your-secret node dist/index.js
 | `cf_dns_bulk_create` | Create up to 100 records in one call | Medium |
 | `cf_dns_bulk_update` | Update up to 100 records in one call | Medium |
 
-### Workers KV (7 tools)
+### Workers KV (9 tools)
 
 | Tool | Description | Token Cost |
 |------|-------------|-----------|
 | `cf_kv_list_namespaces` | List KV namespaces in account | Low |
+| `cf_kv_create_namespace` | Create a KV namespace (**confirm required**) | Low |
+| `cf_kv_delete_namespace` | Delete a KV namespace (**confirm + exact title required**) | Low |
 | `cf_kv_list_keys` | List keys with prefix filter + cursor pagination | Medium |
 | `cf_kv_get` | Read a key's value | Varies |
 | `cf_kv_put` | Write a key-value pair with optional TTL + metadata | Low |
@@ -110,12 +116,14 @@ TRANSPORT=http MCP_API_TOKEN=your-secret node dist/index.js
 | `cf_kv_bulk_put` | Write up to 10,000 key-value pairs | Medium |
 | `cf_kv_bulk_delete` | Delete up to 10,000 keys (**confirm required**) | Low |
 
-### D1 (7 tools)
+### D1 (9 tools)
 
 | Tool | Description | Token Cost |
 |------|-------------|-----------|
 | `cf_d1_list_databases` | List D1 databases in account | Low |
 | `cf_d1_get_database` | Get database details (size, tables, version) | Low |
+| `cf_d1_create_database` | Create a D1 database (**confirm required**) | Low |
+| `cf_d1_delete_database` | Delete a D1 database (**confirm + exact name required**) | Low |
 | `cf_d1_query` | Execute read-only SQL with bind parameters | Varies |
 | `cf_d1_execute` | Execute write SQL (**confirm required**, blocks DROP DATABASE) | Low |
 | `cf_d1_export` | Export all table schemas + row counts | Medium |
@@ -134,12 +142,15 @@ TRANSPORT=http MCP_API_TOKEN=your-secret node dist/index.js
 | `cf_tunnel_update_config` | Replace ingress rules (**confirm required**) | Low |
 | `cf_tunnel_list_connections` | List active cloudflared connectors | Low |
 
-### Workers (10 tools)
+### Workers (13 tools)
 
 | Tool | Description | Token Cost |
 |------|-------------|-----------|
 | `cf_workers_list_scripts` | List all Worker scripts in account | Low |
 | `cf_workers_get_script` | Get script metadata, settings, schedules, deployment | Low |
+| `cf_workers_get_settings` | Get Worker settings and bindings | Medium |
+| `cf_workers_upsert_binding` | Insert or replace a Worker binding (**confirm required**) | Low |
+| `cf_workers_delete_binding` | Remove a Worker binding (**confirm required**) | Low |
 | `cf_workers_list_deployments` | List deployments with version routing | Low |
 | `cf_workers_create_deployment` | Deploy versions with percentage routing (**confirm required**) | Low |
 | `cf_workers_list_versions` | List script versions | Low |
@@ -169,6 +180,34 @@ TRANSPORT=http MCP_API_TOKEN=your-secret node dist/index.js
 | `cf_r2_get_bucket` | Get bucket details (location, storage class) | Low |
 | `cf_r2_create_bucket` | Create a new R2 bucket (**confirm required**) | Low |
 | `cf_r2_delete_bucket` | Delete an empty R2 bucket (**confirm required**) | Low |
+
+### Vectorize (8 tools)
+
+| Tool | Description | Token Cost |
+|------|-------------|-----------|
+| `cf_vectorize_list_indexes` | List Vectorize indexes | Low |
+| `cf_vectorize_get_index` | Get a Vectorize index | Low |
+| `cf_vectorize_get_index_info` | Get operational index info | Low |
+| `cf_vectorize_create_index` | Create a Vectorize index (**confirm required**) | Low |
+| `cf_vectorize_delete_index` | Delete a Vectorize index (**confirm + exact name required**) | Low |
+| `cf_vectorize_list_metadata_indexes` | List metadata indexes | Low |
+| `cf_vectorize_create_metadata_index` | Create a metadata index (**confirm required**) | Low |
+| `cf_vectorize_delete_metadata_index` | Delete a metadata index (**confirm required**) | Low |
+
+### AI (10 tools)
+
+| Tool | Description | Token Cost |
+|------|-------------|-----------|
+| `cf_ai_search_query` | Query an AI Search / AutoRAG instance | Varies |
+| `cf_ai_gateway_list_gateways` | List AI Gateways | Low |
+| `cf_ai_gateway_get_gateway` | Get an AI Gateway | Low |
+| `cf_ai_gateway_create_gateway` | Create an AI Gateway (**confirm required**) | Low |
+| `cf_ai_gateway_update_gateway` | Update an AI Gateway (**confirm required**) | Low |
+| `cf_ai_gateway_delete_gateway` | Delete an AI Gateway (**confirm required**) | Low |
+| `cf_ai_gateway_list_logs` | List AI Gateway logs | Medium |
+| `cf_ai_gateway_get_log` | Get an AI Gateway log | Medium |
+| `cf_workers_ai_list_models` | Search Workers AI models | Medium |
+| `cf_workers_ai_run_model` | Run a Workers AI model (**confirm required**) | Varies |
 
 ### Cache (1 tool)
 
@@ -218,7 +257,7 @@ All read tools default to **concise mode** — only the fields needed for decisi
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
 | `CLOUDFLARE_API_TOKEN` | Yes | — | [API token](https://dash.cloudflare.com/profile/api-tokens) |
-| `CLOUDFLARE_ACCOUNT_ID` | For KV/D1/Tunnel | — | [Account ID](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/) (also overridable per-call) |
+| `CLOUDFLARE_ACCOUNT_ID` | For account-level tools | — | [Account ID](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/) (also overridable per-call) |
 | `TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `PORT` | No | `8787` | HTTP server port |
 | `MCP_API_TOKEN` | No | — | Bearer token for HTTP auth |
@@ -229,24 +268,26 @@ All read tools default to **concise mode** — only the fields needed for decisi
 ```
 src/
 ├── index.ts                 — Entry point: stdio / HTTP transport selection
-├── server.ts                — MCP server factory, registers all 53 tools
+├── server.ts                — MCP server factory, registers all 78 tools
 ├── constants.ts             — Shared config (limits, record types, field lists)
 ├── tools/
 │   ├── zones.ts             — cf_dns_list_zones, cf_dns_get_zone
 │   ├── records-read.ts      — cf_dns_list_records, cf_dns_get_record, cf_dns_export_records
 │   ├── records-write.ts     — cf_dns_create_record, cf_dns_update_record, cf_dns_delete_record
 │   ├── records-bulk.ts      — cf_dns_bulk_create, cf_dns_bulk_update
-│   ├── kv.ts                — 7 Workers KV tools
-│   ├── d1.ts                — 7 D1 database tools
+│   ├── kv.ts                — 9 Workers KV tools
+│   ├── d1.ts                — 9 D1 database tools
 │   ├── tunnels.ts           — 7 Cloudflare Tunnel tools
-│   ├── workers.ts           — 10 Workers script/deployment/secret tools
+│   ├── workers.ts           — 13 Workers script/deployment/secret/binding tools
 │   ├── pages.ts             — 7 Pages project/deployment tools
 │   ├── r2.ts                — 4 R2 bucket management tools
+│   ├── vectorize.ts         — 8 Vectorize index tools
+│   ├── ai.ts                — 10 AI Search, AI Gateway, and Workers AI tools
 │   └── cache.ts             — 1 Cache purge tool
 ├── schemas/                 — Zod validation schemas per domain
 ├── formatters/              — Token-efficient output formatters per domain
 ├── services/
-│   ├── cloudflare.ts        — SDK singleton, account ID resolution, token validation
+│   ├── cloudflare.ts        — SDK singleton, REST helper, account ID resolution, token validation
 │   └── auth.ts              — Bearer + X-API-Key auth for HTTP transport
 └── utils/
     ├── pagination.ts        — Pagination meta, truncation, random sampling
@@ -268,7 +309,7 @@ npm run build            # compile to dist/
 
 ## Stallari Marketplace
 
-This MCP conforms to the `edge-platform-v2` service contract (53/53 operations) across eight service domains: `dns`, `kv`, `d1`, `tunnel`, `workers`, `pages`, `r2`, `cache`.
+This MCP conforms to the `edge-platform-v2` service contract (78/78 operations) across ten service domains: `dns`, `kv`, `d1`, `tunnel`, `workers`, `pages`, `r2`, `vectorize`, `ai`, `cache`.
 
 See `stallari-plugin.yaml` for the full plugin manifest.
 

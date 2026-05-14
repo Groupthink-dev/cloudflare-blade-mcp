@@ -3,12 +3,14 @@
  * cf_kv_put, cf_kv_delete, cf_kv_bulk_put, cf_kv_bulk_delete
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getClient, getAccountId } from "../services/cloudflare.js";
-import { formatNamespaces, formatKeyEntry } from "../formatters/kv.js";
+import { getClient, getAccountId, cloudflareRequest } from "../services/cloudflare.js";
+import { formatNamespace, formatNamespaces, formatKeyEntry } from "../formatters/kv.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
 import {
   ListNamespacesSchema,
+  CreateNamespaceSchema,
+  DeleteNamespaceSchema,
   ListKeysSchema,
   GetValueSchema,
   PutValueSchema,
@@ -18,6 +20,8 @@ import {
 } from "../schemas/kv.js";
 import type {
   ListNamespacesInput,
+  CreateNamespaceInput,
+  DeleteNamespaceInput,
   ListKeysInput,
   GetValueInput,
   PutValueInput,
@@ -80,6 +84,93 @@ export function registerKvTools(server: McpServer): void {
 
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
         return { content: [{ type: "text" as const, text }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_kv_create_namespace ────────────────────────────────────
+  server.registerTool(
+    "cf_kv_create_namespace",
+    {
+      title: "Create KV Namespace",
+      description:
+        `Create a Workers KV namespace in the account.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
+        `Returns: { created: true, namespace: { id, title, supports_url_encoding } }`,
+      inputSchema: CreateNamespaceSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: CreateNamespaceInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const namespace = await cloudflareRequest<Record<string, unknown>>(
+          "POST",
+          `/accounts/${accountId}/storage/kv/namespaces`,
+          { body: { title: params.title } }
+        );
+        const formatted = formatNamespace(namespace);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ created: true, namespace: formatted }, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_kv_delete_namespace ────────────────────────────────────
+  server.registerTool(
+    "cf_kv_delete_namespace",
+    {
+      title: "Delete KV Namespace",
+      description:
+        `Permanently delete a Workers KV namespace and all keys. THIS IS IRREVERSIBLE.\n\n` +
+        `Safety: You MUST set confirm=true and provide the exact namespace title.\n\n` +
+        `Returns: { deleted: true, namespace_id, title }`,
+      inputSchema: DeleteNamespaceSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: DeleteNamespaceInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const path = `/accounts/${accountId}/storage/kv/namespaces/${encodeURIComponent(params.namespace_id)}`;
+        const namespace = await cloudflareRequest<Record<string, unknown>>("GET", path);
+        const actualTitle = String(namespace.title ?? "");
+        if (actualTitle !== params.title) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Delete aborted. Namespace title mismatch: expected "${params.title}", got "${actualTitle}".`,
+            }],
+            isError: true,
+          };
+        }
+
+        await cloudflareRequest<unknown>("DELETE", path);
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ deleted: true, namespace_id: params.namespace_id, title: params.title }, null, 2),
+          }],
+        };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

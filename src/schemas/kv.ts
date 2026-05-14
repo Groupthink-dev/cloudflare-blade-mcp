@@ -21,6 +21,35 @@ export const ListNamespacesSchema = AccountIdSchema.extend({
 
 export type ListNamespacesInput = z.infer<typeof ListNamespacesSchema>;
 
+// ─── Create / Delete Namespace ───────────────────────────────────
+
+export const CreateNamespaceSchema = AccountIdSchema.extend({
+  title: z
+    .string()
+    .min(1)
+    .describe("Name for the new KV namespace."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to create a namespace."),
+}).strict();
+
+export type CreateNamespaceInput = z.infer<typeof CreateNamespaceSchema>;
+
+export const DeleteNamespaceSchema = AccountIdSchema.extend({
+  namespace_id: z
+    .string()
+    .describe("KV namespace ID (32-char hex)."),
+  title: z
+    .string()
+    .min(1)
+    .describe("Exact namespace title. Used to verify the namespace before deletion."),
+  confirm: z
+    .literal(true)
+    .describe("Safety gate: must be explicitly set to true to permanently delete the namespace."),
+}).strict();
+
+export type DeleteNamespaceInput = z.infer<typeof DeleteNamespaceSchema>;
+
 // ─── List Keys ────────────────────────────────────────────────────
 
 export const ListKeysSchema = AccountIdSchema.extend({

@@ -4,6 +4,8 @@ import { formatZone, formatZones } from "../src/formatters/zone.js";
 import { formatNamespace, formatNamespaces, formatKeyEntry } from "../src/formatters/kv.js";
 import { formatDatabase, formatDatabases, formatQueryResult } from "../src/formatters/d1.js";
 import { formatTunnel, formatTunnels, formatConnection, formatIngressRule } from "../src/formatters/tunnel.js";
+import { formatMetadataIndex, formatVectorizeIndex } from "../src/formatters/vectorize.js";
+import { formatAiGateway, formatWorkersAiModel } from "../src/formatters/ai.js";
 
 // ─── DNS Record Formatters ─────────────────────────────────────
 
@@ -187,6 +189,56 @@ describe("formatQueryResult", () => {
     expect(formatted.rows).toEqual([{ id: 1, name: "test" }]);
     expect(formatted.meta.duration).toBe(1.5);
     expect(formatted.meta.rows_read).toBe(1);
+  });
+});
+
+// ─── Vectorize Formatters ───────────────────────────────────────
+
+describe("formatVectorizeIndex", () => {
+  it("returns concise index fields", () => {
+    const index = {
+      name: "docs",
+      config: { dimensions: 768, metric: "cosine" },
+      description: "Docs index",
+      created_on: "2026-01-01T00:00:00Z",
+    };
+    const result = formatVectorizeIndex(index);
+    expect(result.name).toBe("docs");
+    expect(result.dimensions).toBe(768);
+    expect(result.metric).toBe("cosine");
+    expect(result.description).toBe("Docs index");
+  });
+});
+
+describe("formatMetadataIndex", () => {
+  it("supports Cloudflare camelCase fields", () => {
+    const result = formatMetadataIndex({ propertyName: "url", indexType: "string" });
+    expect(result.property_name).toBe("url");
+    expect(result.index_type).toBe("string");
+  });
+});
+
+// ─── AI Formatters ───────────────────────────────────────────────
+
+describe("formatAiGateway", () => {
+  it("returns concise gateway fields", () => {
+    const result = formatAiGateway({ id: "gw1", name: "prod", created_at: "2026-01-01T00:00:00Z" });
+    expect(result.id).toBe("gw1");
+    expect(result.name).toBe("prod");
+    expect(result.created_at).toBe("2026-01-01T00:00:00Z");
+  });
+});
+
+describe("formatWorkersAiModel", () => {
+  it("returns concise model fields", () => {
+    const result = formatWorkersAiModel({
+      id: "@cf/baai/bge-base-en-v1.5",
+      task: "Text Embeddings",
+      author: "baai",
+    });
+    expect(result.id).toBe("@cf/baai/bge-base-en-v1.5");
+    expect(result.task).toBe("Text Embeddings");
+    expect(result.author).toBe("baai");
   });
 });
 

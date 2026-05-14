@@ -3,13 +3,15 @@
  * cf_d1_execute, cf_d1_export, cf_d1_list_tables, cf_d1_describe_table
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getClient, getAccountId } from "../services/cloudflare.js";
+import { getClient, getAccountId, cloudflareRequest } from "../services/cloudflare.js";
 import { formatDatabase, formatDatabases, formatQueryResult } from "../formatters/d1.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
 import {
   ListDatabasesSchema,
   GetDatabaseSchema,
+  CreateDatabaseSchema,
+  DeleteDatabaseSchema,
   QuerySchema,
   ExecuteSchema,
   ExportSchema,
@@ -19,6 +21,8 @@ import {
 import type {
   ListDatabasesInput,
   GetDatabaseInput,
+  CreateDatabaseInput,
+  DeleteDatabaseInput,
   QueryInput,
   ExecuteInput,
   ExportInput,
@@ -72,6 +76,97 @@ export function registerD1Tools(server: McpServer): void {
 
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
         return { content: [{ type: "text" as const, text }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_d1_create_database ─────────────────────────────────────
+  server.registerTool(
+    "cf_d1_create_database",
+    {
+      title: "Create D1 Database",
+      description:
+        `Create a D1 database in the account.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
+        `Returns: { created: true, database: { uuid, name, version, num_tables, file_size, created_at } }`,
+      inputSchema: CreateDatabaseSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: CreateDatabaseInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const body: Record<string, unknown> = { name: params.name };
+        if (params.jurisdiction) body.jurisdiction = params.jurisdiction;
+        if (params.primary_location_hint) body.primary_location_hint = params.primary_location_hint;
+
+        const database = await cloudflareRequest<Record<string, unknown>>(
+          "POST",
+          `/accounts/${accountId}/d1/database`,
+          { body }
+        );
+        const formatted = formatDatabase(database);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ created: true, database: formatted }, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_d1_delete_database ─────────────────────────────────────
+  server.registerTool(
+    "cf_d1_delete_database",
+    {
+      title: "Delete D1 Database",
+      description:
+        `Permanently delete a D1 database. THIS IS IRREVERSIBLE.\n\n` +
+        `Safety: You MUST set confirm=true and provide the exact database name.\n\n` +
+        `Returns: { deleted: true, database_id, name }`,
+      inputSchema: DeleteDatabaseSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: DeleteDatabaseInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const path = `/accounts/${accountId}/d1/database/${encodeURIComponent(params.database_id)}`;
+        const database = await cloudflareRequest<Record<string, unknown>>("GET", path);
+        const actualName = String(database.name ?? "");
+        if (actualName !== params.name) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Delete aborted. Database name mismatch: expected "${params.name}", got "${actualName}".`,
+            }],
+            isError: true,
+          };
+        }
+
+        await cloudflareRequest<unknown>("DELETE", path);
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ deleted: true, database_id: params.database_id, name: params.name }, null, 2),
+          }],
+        };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

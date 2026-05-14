@@ -2,6 +2,8 @@ import Cloudflare from "cloudflare";
 
 let _client: Cloudflare | null = null;
 
+const API_BASE = "https://api.cloudflare.com/client/v4";
+
 /**
  * Returns a singleton Cloudflare SDK client.
  * Reads CLOUDFLARE_API_TOKEN from the environment.
@@ -36,6 +38,63 @@ export function getAccountId(override?: string): string {
     );
   }
   return accountId;
+}
+
+interface CloudflareEnvelope<T> {
+  success: boolean;
+  result: T;
+  errors?: Array<{ code?: number; message?: string }>;
+  messages?: Array<{ code?: number; message?: string }>;
+  result_info?: Record<string, unknown>;
+}
+
+interface RequestOptions {
+  query?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;
+}
+
+/**
+ * Calls a Cloudflare v4 REST endpoint and returns the envelope result.
+ * Use this for APIs not covered cleanly by the pinned Cloudflare SDK.
+ */
+export async function cloudflareRequest<T>(
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!apiToken) {
+    throw new Error(
+      "CLOUDFLARE_API_TOKEN environment variable is required. " +
+        "Create a scoped token at https://dash.cloudflare.com/profile/api-tokens."
+    );
+  }
+
+  const url = new URL(`${API_BASE}${path}`);
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+
+  const text = await response.text();
+  const parsed = text ? (JSON.parse(text) as CloudflareEnvelope<T>) : undefined;
+
+  if (!response.ok || parsed?.success === false) {
+    const details =
+      parsed?.errors?.map((err) => err.message || err.code).filter(Boolean).join("; ") ||
+      response.statusText;
+    throw new Error(`Cloudflare API ${method} ${path} failed (${response.status}): ${details}`);
+  }
+
+  return parsed?.result as T;
 }
 
 /**

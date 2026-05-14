@@ -5,7 +5,7 @@
  * cf_workers_get_schedules, cf_workers_put_schedules
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getClient, getAccountId } from "../services/cloudflare.js";
+import { getClient, getAccountId, cloudflareRequest } from "../services/cloudflare.js";
 import {
   formatScript,
   formatScripts,
@@ -23,6 +23,9 @@ import { handleApiError } from "../utils/errors.js";
 import {
   ListScriptsSchema,
   GetScriptSchema,
+  GetSettingsSchema,
+  UpsertBindingSchema,
+  DeleteBindingSchema,
   ListDeploymentsSchema,
   CreateDeploymentSchema,
   ListVersionsSchema,
@@ -35,6 +38,9 @@ import {
 import type {
   ListScriptsInput,
   GetScriptInput,
+  GetSettingsInput,
+  UpsertBindingInput,
+  DeleteBindingInput,
   ListDeploymentsInput,
   CreateDeploymentInput,
   ListVersionsInput,
@@ -44,6 +50,14 @@ import type {
   GetSchedulesInput,
   PutSchedulesInput,
 } from "../schemas/workers.js";
+
+function settingsPath(accountId: string, scriptName: string): string {
+  return `/accounts/${accountId}/workers/scripts/${encodeURIComponent(scriptName)}/settings`;
+}
+
+function bindingName(binding: unknown): string {
+  return String((binding as Record<string, unknown>).name ?? "");
+}
 
 export function registerWorkersTools(server: McpServer): void {
   // ─── cf_workers_list_scripts ────────────────────────────────────
@@ -153,6 +167,151 @@ export function registerWorkersTools(server: McpServer): void {
 
         return {
           content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_workers_get_settings ───────────────────────────────────
+  server.registerTool(
+    "cf_workers_get_settings",
+    {
+      title: "Get Worker Settings",
+      description:
+        `Get a Worker's settings, including bindings and compatibility configuration.\n\n` +
+        `Returns: { script_name, settings }`,
+      inputSchema: GetSettingsSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (params: GetSettingsInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const settings = await cloudflareRequest<Record<string, unknown>>(
+          "GET",
+          settingsPath(accountId, params.script_name)
+        );
+        return {
+          content: [{
+            type: "text" as const,
+            text: truncateIfNeeded(JSON.stringify({ script_name: params.script_name, settings }, null, 2)),
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_workers_upsert_binding ─────────────────────────────────
+  server.registerTool(
+    "cf_workers_upsert_binding",
+    {
+      title: "Upsert Worker Binding",
+      description:
+        `Insert or replace a Worker binding by binding.name through the Worker settings API.\n\n` +
+        `Pass the complete Cloudflare binding object, e.g. KV, D1, R2, Vectorize, AI, AI Search, service, or plain text binding.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.`,
+      inputSchema: UpsertBindingSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: UpsertBindingInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const path = settingsPath(accountId, params.script_name);
+        const settings = await cloudflareRequest<Record<string, unknown>>("GET", path);
+        const existing = Array.isArray(settings.bindings) ? settings.bindings : [];
+        const nextBindings = [
+          ...existing.filter((binding) => bindingName(binding) !== params.binding.name),
+          params.binding,
+        ];
+        const updated = await cloudflareRequest<Record<string, unknown>>("PATCH", path, {
+          body: { bindings: nextBindings },
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              updated: true,
+              script_name: params.script_name,
+              binding_name: params.binding.name,
+              bindings_count: nextBindings.length,
+              settings: updated,
+            }, null, 2),
+          }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: handleApiError(error) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ─── cf_workers_delete_binding ─────────────────────────────────
+  server.registerTool(
+    "cf_workers_delete_binding",
+    {
+      title: "Delete Worker Binding",
+      description:
+        `Remove a Worker binding by name through the Worker settings API.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.`,
+      inputSchema: DeleteBindingSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (params: DeleteBindingInput) => {
+      try {
+        const accountId = getAccountId(params.account_id);
+        const path = settingsPath(accountId, params.script_name);
+        const settings = await cloudflareRequest<Record<string, unknown>>("GET", path);
+        const existing = Array.isArray(settings.bindings) ? settings.bindings : [];
+        const nextBindings = existing.filter((binding) => bindingName(binding) !== params.binding_name);
+        if (nextBindings.length === existing.length) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Delete aborted. Binding "${params.binding_name}" was not found on ${params.script_name}.`,
+            }],
+            isError: true,
+          };
+        }
+        const updated = await cloudflareRequest<Record<string, unknown>>("PATCH", path, {
+          body: { bindings: nextBindings },
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              deleted: true,
+              script_name: params.script_name,
+              binding_name: params.binding_name,
+              bindings_count: nextBindings.length,
+              settings: updated,
+            }, null, 2),
+          }],
         };
       } catch (error) {
         return {
