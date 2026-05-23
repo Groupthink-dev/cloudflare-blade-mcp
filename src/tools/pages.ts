@@ -14,6 +14,7 @@ import {
 } from "../formatters/pages.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "../utils/meta.js";
 import {
   ListProjectsSchema,
   GetProjectSchema,
@@ -269,6 +270,7 @@ export function registerPagesTools(server: McpServer): void {
     },
     async (params: ListPagesDomainsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -278,11 +280,19 @@ export function registerPagesTools(server: McpServer): void {
         })) {
           domains.push(domain as unknown as Record<string, unknown>);
         }
+        const latencyMs = Math.round(performance.now() - t0);
 
         const formatted = formatDomains(domains);
         const output = { total: formatted.length, domains: formatted };
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [`project_name=${params.project_name}`],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

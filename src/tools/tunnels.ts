@@ -7,6 +7,7 @@ import { getClient, getAccountId } from "../services/cloudflare.js";
 import { formatTunnel, formatTunnels, formatConnection, formatIngressRule } from "../formatters/tunnel.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "../utils/meta.js";
 import {
   ListTunnelsSchema,
   GetTunnelSchema,
@@ -268,6 +269,7 @@ export function registerTunnelTools(server: McpServer): void {
     },
     async (params: ListConfigsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -275,6 +277,7 @@ export function registerTunnelTools(server: McpServer): void {
           params.tunnel_id,
           { account_id: accountId }
         );
+        const latencyMs = Math.round(performance.now() - t0);
 
         const configObj = config as unknown as Record<string, unknown>;
         const tunnelConfig = configObj.config as Record<string, unknown> | undefined;
@@ -285,9 +288,15 @@ export function registerTunnelTools(server: McpServer): void {
           tunnel_id: params.tunnel_id,
           ingress: formatted,
         };
-
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [`tunnel_id=${params.tunnel_id}`],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -389,6 +398,7 @@ export function registerTunnelTools(server: McpServer): void {
     },
     async (params: ListConnectionsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -402,6 +412,7 @@ export function registerTunnelTools(server: McpServer): void {
         for await (const connector of result) {
           connectors.push(connector as unknown as Record<string, unknown>);
         }
+        const latencyMs = Math.round(performance.now() - t0);
 
         const formatted = connectors.map((conn) => formatConnection(conn));
 
@@ -409,9 +420,15 @@ export function registerTunnelTools(server: McpServer): void {
           tunnel_id: params.tunnel_id,
           connections: formatted,
         };
-
+        const text = truncateIfNeeded(JSON.stringify(output, null, 2));
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [`tunnel_id=${params.tunnel_id}`],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: truncateIfNeeded(JSON.stringify(output, null, 2)) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

@@ -20,6 +20,7 @@ import {
 } from "../formatters/workers.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "../utils/meta.js";
 import {
   ListScriptsSchema,
   GetScriptSchema,
@@ -492,6 +493,7 @@ export function registerWorkersTools(server: McpServer): void {
     },
     async (params: ListSecretsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -501,11 +503,19 @@ export function registerWorkersTools(server: McpServer): void {
         })) {
           secrets.push(secret as unknown as Record<string, unknown>);
         }
+        const latencyMs = Math.round(performance.now() - t0);
 
         const formatted = formatSecrets(secrets);
         const output = { total: formatted.length, secrets: formatted };
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [`script_name=${params.script_name}`],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
