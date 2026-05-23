@@ -6,6 +6,7 @@ import { getClient } from "../services/cloudflare.js";
 import { formatRecord, formatRecords, buildRecordSummary } from "../formatters/record.js";
 import { buildPaginationMeta, truncateIfNeeded, randomSample } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "../utils/meta.js";
 import {
   ListRecordsSchema,
   GetRecordSchema,
@@ -176,11 +177,25 @@ export function registerRecordReadTools(server: McpServer): void {
     },
     async (params: ExportRecordsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const result = await client.dns.records.export({ zone_id: params.zone_id });
+        const latencyMs = Math.round(performance.now() - t0);
         const text = typeof result === "string" ? result : JSON.stringify(result);
+        const truncated = truncateIfNeeded(text);
+        // For BIND zonefile exports, record count is an approximation —
+        // count non-comment, non-blank lines as a proxy for record cardinality.
+        const recordLines = truncated
+          .split("\n")
+          .filter((line) => line.trim() && !line.trim().startsWith(";")).length;
+        const metaLine = formatMetaLine({
+          matched_total: recordLines,
+          returned: recordLines,
+          filtered_by: [`zone_id=${params.zone_id}`],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: truncateIfNeeded(text) }],
+          content: [{ type: "text" as const, text: appendMeta(truncated, metaLine) }],
         };
       } catch (error) {
         return {

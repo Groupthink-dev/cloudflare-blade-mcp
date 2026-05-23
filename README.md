@@ -307,6 +307,29 @@ npm run typecheck        # type-check only
 npm run build            # compile to dist/
 ```
 
+## Tool output shape
+
+As of `0.4.0`, multi-record list tools (and a handful of single-call introspection
+tools — `cf_d1_query`, `cf_d1_describe_table`, `cf_d1_export`, `cf_dns_export_records`)
+append a single-line `_meta` envelope to their text response per DD-338 Phase C:
+
+```
+<existing JSON / text payload>
+
+_meta: {"matched_total":42,"returned":10,"filtered_by":["database_id=abc"],"latency_ms":12}
+```
+
+Wire shape:
+
+- Required: `matched_total: Int`, `returned: Int`, `filtered_by: [String]`, `latency_ms: Int`.
+- Optional (omitted when empty / null): `redactions: [String]`, `next_cursor: String?`, `error_notes: [String]`.
+- `filtered_by` is sorted alphabetically for hash reproducibility.
+- The literal `\n\n_meta: ` separator + single-line JSON tail match the Stallari assembler regex `\n\n_meta: (\{.*\})$`.
+
+Existing consumers that string-match the JSON payload front are forward-compatible —
+the envelope is purely additive. `cf_d1_query` redacts the raw SQL to a sha256-12
+base64-urlsafe digest (`sql=<12 chars>`) for privacy and token economy.
+
 ## Stallari Marketplace
 
 This MCP conforms to the `edge-platform-v2` service contract (78/78 operations) across ten service domains: `dns`, `kv`, `d1`, `tunnel`, `workers`, `pages`, `r2`, `vectorize`, `ai`, `cache`.

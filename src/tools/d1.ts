@@ -2,11 +2,13 @@
  * D1 database tools: cf_d1_list_databases, cf_d1_get_database, cf_d1_query,
  * cf_d1_execute, cf_d1_export, cf_d1_list_tables, cf_d1_describe_table
  */
+import { createHash } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient, getAccountId, cloudflareRequest } from "../services/cloudflare.js";
 import { formatDatabase, formatDatabases, formatQueryResult } from "../formatters/d1.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "../utils/meta.js";
 import {
   ListDatabasesSchema,
   GetDatabaseSchema,
@@ -29,6 +31,19 @@ import type {
   ListTablesInput,
   DescribeTableInput,
 } from "../schemas/d1.js";
+
+/**
+ * Hash a SQL string to a privacy-safe, token-bound digest for use in
+ * `_meta.filtered_by` per DD-338 Phase C Wave 3 spec § OQ-6.
+ * sha256 + base64 + first 12 chars (urlsafe; strips +/=).
+ */
+function sqlHash(sql: string): string {
+  return createHash("sha256")
+    .update(sql, "utf8")
+    .digest("base64")
+    .replace(/[+/=]/g, "")
+    .slice(0, 12);
+}
 
 export function registerD1Tools(server: McpServer): void {
   // ─── cf_d1_list_databases ───────────────────────────────────────
@@ -235,6 +250,7 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: QueryInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -248,6 +264,7 @@ export function registerD1Tools(server: McpServer): void {
           params.database_id,
           payload as unknown as Parameters<typeof client.d1.database.query>[1],
         );
+        const latencyMs = Math.round(performance.now() - t0);
 
         // D1 query returns an array of result objects
         const results = Array.isArray(result) ? result : [result];
@@ -255,10 +272,26 @@ export function registerD1Tools(server: McpServer): void {
           formatQueryResult(r as unknown as Record<string, unknown>)
         );
 
+        // Sum row counts across statements for envelope cardinality.
+        let totalRows = 0;
+        for (const r of formatted) {
+          if (Array.isArray(r.rows)) totalRows += r.rows.length;
+        }
+
         // For single-statement queries, unwrap the array
         const output = formatted.length === 1 ? formatted[0] : formatted;
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+
+        const metaLine = formatMetaLine({
+          matched_total: totalRows,
+          returned: totalRows,
+          filtered_by: [
+            `database_id=${params.database_id}`,
+            `sql=${sqlHash(params.sql)}`,
+          ],
+          latency_ms: latencyMs,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -371,6 +404,7 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: ExportInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -389,6 +423,7 @@ export function registerD1Tools(server: McpServer): void {
 
         // Get row counts for each table
         const tableInfo: Array<{ name: string; sql: string; row_count: number }> = [];
+        const countFailed: string[] = [];
         for (const table of tables) {
           const t = table as Record<string, unknown>;
           const tableName = String(t.name ?? "");
@@ -411,6 +446,7 @@ export function registerD1Tools(server: McpServer): void {
           } catch {
             // If count fails (e.g. virtual table), use -1 to indicate unknown
             rowCount = -1;
+            countFailed.push(tableName);
           }
 
           tableInfo.push({
@@ -420,9 +456,19 @@ export function registerD1Tools(server: McpServer): void {
           });
         }
 
+        const latencyMs = Math.round(performance.now() - t0);
         const output = { tables: tableInfo };
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+
+        const errorNotes = countFailed.map((n) => `count_failed:${n}`);
+        const metaLine = formatMetaLine({
+          matched_total: tableInfo.length,
+          returned: tableInfo.length,
+          filtered_by: [`database_id=${params.database_id}`],
+          latency_ms: latencyMs,
+          error_notes: errorNotes,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -451,6 +497,7 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: ListTablesInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -469,6 +516,7 @@ export function registerD1Tools(server: McpServer): void {
 
         // Get row counts
         const tables: Array<{ name: string; row_count: number }> = [];
+        const countFailed: string[] = [];
         for (const row of tableRows) {
           const tableName = String((row as Record<string, unknown>).name ?? "");
 
@@ -489,14 +537,24 @@ export function registerD1Tools(server: McpServer): void {
             }
           } catch {
             rowCount = -1;
+            countFailed.push(tableName);
           }
 
           tables.push({ name: tableName, row_count: rowCount });
         }
 
+        const latencyMs = Math.round(performance.now() - t0);
         const output = { tables };
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          matched_total: tables.length,
+          returned: tables.length,
+          filtered_by: [`database_id=${params.database_id}`],
+          latency_ms: latencyMs,
+          error_notes: countFailed.map((n) => `count_failed:${n}`),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -525,6 +583,7 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: DescribeTableInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -535,6 +594,7 @@ export function registerD1Tools(server: McpServer): void {
             sql: `PRAGMA table_info("${params.table_name}")`,
           } as Parameters<typeof client.d1.database.query>[1],
         );
+        const latencyMs = Math.round(performance.now() - t0);
 
         const results = Array.isArray(result) ? result : [result];
         const firstResult = results[0] as unknown as Record<string, unknown>;
@@ -556,9 +616,18 @@ export function registerD1Tools(server: McpServer): void {
           table: params.table_name,
           columns,
         };
-
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          matched_total: columns.length,
+          returned: columns.length,
+          filtered_by: [
+            `database_id=${params.database_id}`,
+            `table_name=${params.table_name}`,
+          ],
+          latency_ms: latencyMs,
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
