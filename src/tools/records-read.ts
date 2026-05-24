@@ -42,6 +42,7 @@ export function registerRecordReadTools(server: McpServer): void {
     },
     async (params: ListRecordsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const concise = params.include_details ? false : params.concise;
 
@@ -73,11 +74,29 @@ export function registerRecordReadTools(server: McpServer): void {
 
         const total = records.length;
 
+        // Common filtered_by builder for all branches
+        const filteredBy: string[] = [`zone_id=${params.zone_id}`];
+        if (params.filter_type) filteredBy.push(`type=${params.filter_type}`);
+        if (params.filter_name) filteredBy.push(`name=${params.filter_name}`);
+        if (params.filter_content) filteredBy.push(`content=${params.filter_content}`);
+        if (params.filter_proxied !== undefined) filteredBy.push(`proxied=${params.filter_proxied}`);
+        if (params.filter_comment) filteredBy.push(`comment=${params.filter_comment}`);
+        if (params.filter_tag) filteredBy.push(`tag=${params.filter_tag}`);
+
         // ── Summary-only mode (most token-efficient) ──
         if (params.summary_only) {
           const summary = buildRecordSummary(records);
+          const text = JSON.stringify({ summary }, null, 2);
+          const metaLine = formatMetaLine({
+            matched_total: total,
+            returned: total,
+            filtered_by: [...filteredBy, "mode=summary_only"],
+            latency_ms: Math.round(performance.now() - t0),
+            redactions: [],
+            next_cursor: null,
+          });
           return {
-            content: [{ type: "text" as const, text: JSON.stringify({ summary }, null, 2) }],
+            content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
           };
         }
 
@@ -89,8 +108,17 @@ export function registerRecordReadTools(server: McpServer): void {
             sample: { total_in_zone: total, sample_size: formatted.length },
             records: formatted,
           };
+          const text = truncateIfNeeded(JSON.stringify(output, null, 2));
+          const metaLine = formatMetaLine({
+            matched_total: total,
+            returned: formatted.length,
+            filtered_by: [...filteredBy, `mode=random_sample`, `sample_size=${params.sample_size}`],
+            latency_ms: Math.round(performance.now() - t0),
+            redactions: [],
+            next_cursor: null,
+          });
           return {
-            content: [{ type: "text" as const, text: truncateIfNeeded(JSON.stringify(output, null, 2)) }],
+            content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
           };
         }
 
@@ -110,7 +138,15 @@ export function registerRecordReadTools(server: McpServer): void {
         };
 
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: total,
+          returned: formatted.length,
+          filtered_by: [...filteredBy, `page=${params.page}`, `per_page=${params.per_page}`],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

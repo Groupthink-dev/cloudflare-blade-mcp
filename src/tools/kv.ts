@@ -7,6 +7,7 @@ import { getClient, getAccountId, cloudflareRequest } from "../services/cloudfla
 import { formatNamespace, formatNamespaces, formatKeyEntry } from "../formatters/kv.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 import {
   ListNamespacesSchema,
   CreateNamespaceSchema,
@@ -50,6 +51,7 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: ListNamespacesInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -83,7 +85,15 @@ export function registerKvTools(server: McpServer): void {
         };
 
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: total,
+          returned: paged.length,
+          filtered_by: [`page=${params.page}`, `per_page=${params.per_page}`],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -198,6 +208,7 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: ListKeysInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -233,8 +244,23 @@ export function registerKvTools(server: McpServer): void {
         };
         if (cursor) output.cursor = cursor;
 
+        const filteredBy: string[] = [
+          `namespace_id=${params.namespace_id}`,
+          `limit=${params.limit}`,
+        ];
+        if (params.prefix) filteredBy.push(`prefix=${params.prefix}`);
+        if (params.cursor) filteredBy.push(`cursor=${params.cursor}`);
+
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: filteredBy,
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: cursor ?? null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

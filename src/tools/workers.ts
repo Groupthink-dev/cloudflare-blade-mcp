@@ -79,6 +79,7 @@ export function registerWorkersTools(server: McpServer): void {
     },
     async (params: ListScriptsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -90,7 +91,15 @@ export function registerWorkersTools(server: McpServer): void {
         const formatted = formatScripts(scripts);
         const output = { total: formatted.length, scripts: formatted };
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -341,6 +350,7 @@ export function registerWorkersTools(server: McpServer): void {
     },
     async (params: ListDeploymentsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -354,7 +364,15 @@ export function registerWorkersTools(server: McpServer): void {
 
         const output = { total: formatted.length, deployments: formatted };
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [`script_name=${params.script_name}`],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -450,6 +468,7 @@ export function registerWorkersTools(server: McpServer): void {
     },
     async (params: ListVersionsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -465,7 +484,19 @@ export function registerWorkersTools(server: McpServer): void {
         const formatted = formatVersions(versions);
         const output = { total: formatted.length, versions: formatted };
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [
+            `script_name=${params.script_name}`,
+            `page=${params.page}`,
+            `per_page=${params.per_page}`,
+          ],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

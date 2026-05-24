@@ -31,6 +31,7 @@ vi.mock("../src/services/cloudflare.js", () => {
     zeroTrust: {
       tunnels: {
         cloudflared: {
+          list: vi.fn(),
           configurations: { get: vi.fn() },
           connections: { get: vi.fn() },
         },
@@ -38,16 +39,33 @@ vi.mock("../src/services/cloudflare.js", () => {
     },
     workers: {
       scripts: {
+        list: vi.fn(),
         secrets: { list: vi.fn() },
+        deployments: { get: vi.fn() },
+        versions: { list: vi.fn() },
       },
     },
     pages: {
       projects: {
+        list: vi.fn(),
         domains: { list: vi.fn() },
+        deployments: { list: vi.fn() },
       },
     },
     dns: {
-      records: { export: vi.fn() },
+      records: { export: vi.fn(), list: vi.fn() },
+    },
+    zones: {
+      list: vi.fn(),
+    },
+    kv: {
+      namespaces: {
+        list: vi.fn(),
+        keys: { list: vi.fn() },
+      },
+    },
+    r2: {
+      buckets: { list: vi.fn() },
     },
   };
   return {
@@ -419,6 +437,312 @@ describe("cf_dns_export_records envelope", () => {
     const r3 = stripLatency((await tool.handler(args)).content[0].text);
     expect(r1).toBe(r2);
     expect(r2).toBe(r3);
+  });
+});
+
+// ─── DD-338 Phase C Wave 4 — adoption-sweep 12 list_* tools ───────────────
+//
+// One envelope test per tool: parse `_meta`, sanity-check matched_total +
+// filtered_by, confirm sort + latency. Mocks the upstream SDK call site to
+// yield a small deterministic payload. Mirrors the Wave 3 pattern above.
+
+describe("cf_d1_list_databases envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.d1 as { database: { list: ReturnType<typeof vi.fn> } }).database.list;
+    async function* iter() {
+      yield { uuid: "db1", name: "alpha", version: "1.0", num_tables: 2, file_size: 1024, created_at: "2026-01-01" };
+      yield { uuid: "db2", name: "beta", version: "1.0", num_tables: 1, file_size: 512, created_at: "2026-01-02" };
+    }
+    list.mockReturnValue(iter());
+  });
+
+  it("envelope contains pagination scope", async () => {
+    const tool = getTool(server, "cf_d1_list_databases");
+    const res = await tool.handler({ page: 1, per_page: 50 });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect(meta.returned).toBe(2);
+    expect(meta.filtered_by).toEqual(["page=1", "per_page=50"]);
+    expect(meta.next_cursor).toBeNull();
+    expect(typeof meta.latency_ms).toBe("number");
+  });
+});
+
+describe("cf_dns_list_zones envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.zones as { list: ReturnType<typeof vi.fn> }).list;
+    async function* iter() {
+      yield { id: "z1", name: "example.com", status: "active", name_servers: [] };
+      yield { id: "z2", name: "example.org", status: "active", name_servers: [] };
+    }
+    list.mockResolvedValue(iter());
+  });
+
+  it("envelope contains pagination + filter scope", async () => {
+    const tool = getTool(server, "cf_dns_list_zones");
+    const res = await tool.handler({
+      page: 1,
+      per_page: 50,
+      concise: true,
+      include_details: false,
+      filter_status: "active",
+    });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect(meta.returned).toBe(2);
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+    expect((meta.filtered_by as string[])).toContain("status=active");
+  });
+});
+
+describe("cf_dns_list_records envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.dns as { records: { list: ReturnType<typeof vi.fn> } }).records.list;
+    async function* iter() {
+      yield { id: "r1", type: "A", name: "a.example.com", content: "1.2.3.4", proxied: false, ttl: 300 };
+      yield { id: "r2", type: "A", name: "b.example.com", content: "5.6.7.8", proxied: true, ttl: 300 };
+    }
+    list.mockResolvedValue(iter());
+  });
+
+  it("envelope contains zone_id scope", async () => {
+    const tool = getTool(server, "cf_dns_list_records");
+    const res = await tool.handler({
+      zone_id: "zone-abc",
+      page: 1,
+      per_page: 50,
+      concise: true,
+      include_details: false,
+      summary_only: false,
+      random_sample: false,
+      sample_size: 10,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect((meta.filtered_by as string[])).toContain("zone_id=zone-abc");
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+  });
+});
+
+describe("cf_kv_list_namespaces envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.kv as { namespaces: { list: ReturnType<typeof vi.fn> } }).namespaces.list;
+    async function* iter() {
+      yield { id: "ns1", title: "session", supports_url_encoding: true };
+    }
+    list.mockResolvedValue(iter());
+  });
+
+  it("envelope contains pagination scope", async () => {
+    const tool = getTool(server, "cf_kv_list_namespaces");
+    const res = await tool.handler({ page: 1, per_page: 50 });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(1);
+    expect(meta.filtered_by).toEqual(["page=1", "per_page=50"]);
+  });
+});
+
+describe("cf_kv_list_keys envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.kv as { namespaces: { keys: { list: ReturnType<typeof vi.fn> } } }).namespaces.keys.list;
+    async function* iter() {
+      yield { name: "k1" };
+      yield { name: "k2" };
+    }
+    const response = iter() as AsyncGenerator<unknown> & { result_info?: Record<string, unknown> };
+    response.result_info = { cursor: "next-page-token" };
+    list.mockResolvedValue(response);
+  });
+
+  it("envelope contains namespace_id + next_cursor", async () => {
+    const tool = getTool(server, "cf_kv_list_keys");
+    const res = await tool.handler({
+      namespace_id: "ns-xyz",
+      limit: 1000,
+      prefix: "user:",
+    });
+    const meta = parseMeta(res.content[0].text);
+    expect((meta.filtered_by as string[])).toContain("namespace_id=ns-xyz");
+    expect((meta.filtered_by as string[])).toContain("prefix=user:");
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+    expect(meta.next_cursor).toBe("next-page-token");
+  });
+});
+
+describe("cf_tunnel_list envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.zeroTrust as { tunnels: { cloudflared: { list: ReturnType<typeof vi.fn> } } })
+      .tunnels.cloudflared.list;
+    async function* iter() {
+      yield { id: "t1", name: "tun-a", status: "healthy", created_at: "2026-01-01", connections: [] };
+    }
+    list.mockResolvedValue(iter());
+  });
+
+  it("envelope contains pagination + is_deleted scope", async () => {
+    const tool = getTool(server, "cf_tunnel_list");
+    const res = await tool.handler({ is_deleted: false, page: 1, per_page: 50 });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(1);
+    expect((meta.filtered_by as string[])).toContain("is_deleted=false");
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+  });
+});
+
+describe("cf_workers_list_scripts envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.workers as { scripts: { list: ReturnType<typeof vi.fn> } }).scripts.list;
+    async function* iter() {
+      yield { id: "worker-a", created_on: "2026-01-01", modified_on: "2026-01-02" };
+      yield { id: "worker-b", created_on: "2026-01-03", modified_on: "2026-01-04" };
+    }
+    list.mockReturnValue(iter());
+  });
+
+  it("envelope has empty filtered_by (no filters)", async () => {
+    const tool = getTool(server, "cf_workers_list_scripts");
+    const res = await tool.handler({});
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect(meta.filtered_by).toEqual([]);
+  });
+});
+
+describe("cf_workers_list_deployments envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const get = (mockClient.workers as { scripts: { deployments: { get: ReturnType<typeof vi.fn> } } })
+      .scripts.deployments.get;
+    get.mockResolvedValue({
+      deployments: [
+        { id: "d1", created_on: "2026-01-02", author_email: "a@x.com", source: "api" },
+        { id: "d2", created_on: "2026-01-01", author_email: "b@x.com", source: "api" },
+      ],
+    });
+  });
+
+  it("envelope contains script_name scope", async () => {
+    const tool = getTool(server, "cf_workers_list_deployments");
+    const res = await tool.handler({ script_name: "my-worker" });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect(meta.filtered_by).toEqual(["script_name=my-worker"]);
+  });
+});
+
+describe("cf_workers_list_versions envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.workers as { scripts: { versions: { list: ReturnType<typeof vi.fn> } } })
+      .scripts.versions.list;
+    async function* iter() {
+      yield { id: "v1", number: 2, created_on: "2026-01-02" };
+      yield { id: "v2", number: 1, created_on: "2026-01-01" };
+    }
+    list.mockReturnValue(iter());
+  });
+
+  it("envelope contains script_name + pagination scope", async () => {
+    const tool = getTool(server, "cf_workers_list_versions");
+    const res = await tool.handler({ script_name: "my-worker", page: 1, per_page: 50 });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(2);
+    expect((meta.filtered_by as string[])).toContain("script_name=my-worker");
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+  });
+});
+
+describe("cf_pages_list_projects envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.pages as { projects: { list: ReturnType<typeof vi.fn> } }).projects.list;
+    async function* iter() {
+      yield { name: "site-a", subdomain: "site-a.pages.dev", production_branch: "main", domains: [] };
+    }
+    list.mockReturnValue(iter());
+  });
+
+  it("envelope has empty filtered_by (no filters)", async () => {
+    const tool = getTool(server, "cf_pages_list_projects");
+    const res = await tool.handler({});
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(1);
+    expect(meta.filtered_by).toEqual([]);
+  });
+});
+
+describe("cf_pages_list_deployments envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.pages as { projects: { deployments: { list: ReturnType<typeof vi.fn> } } })
+      .projects.deployments.list;
+    async function* iter() {
+      yield { id: "dep1", environment: "production", url: "https://site-a.pages.dev", stages: [] };
+    }
+    list.mockReturnValue(iter());
+  });
+
+  it("envelope contains project_name + env scope", async () => {
+    const tool = getTool(server, "cf_pages_list_deployments");
+    const res = await tool.handler({ project_name: "my-site", env: "production" });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(1);
+    expect((meta.filtered_by as string[])).toContain("project_name=my-site");
+    expect((meta.filtered_by as string[])).toContain("env=production");
+    expect(meta.filtered_by).toEqual([...(meta.filtered_by as string[])].sort());
+  });
+});
+
+describe("cf_r2_list_buckets envelope", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    const list = (mockClient.r2 as { buckets: { list: ReturnType<typeof vi.fn> } }).buckets.list;
+    list.mockResolvedValue({
+      buckets: [
+        { name: "bucket-a", location: "wnam", storage_class: "Standard", creation_date: "2026-01-01" },
+      ],
+      cursor: "next-bucket-cursor",
+    });
+  });
+
+  it("envelope contains per_page + next_cursor", async () => {
+    const tool = getTool(server, "cf_r2_list_buckets");
+    const res = await tool.handler({ per_page: 100 });
+    const meta = parseMeta(res.content[0].text);
+    expect(meta.matched_total).toBe(1);
+    expect(meta.filtered_by).toEqual(["per_page=100"]);
+    expect(meta.next_cursor).toBe("next-bucket-cursor");
   });
 });
 
