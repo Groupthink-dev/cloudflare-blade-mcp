@@ -163,6 +163,7 @@ export function registerR2Tools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -179,11 +180,19 @@ export function registerR2Tools(server: McpServer): void {
         );
 
         const formatted = formatBucket(bucket as unknown as Record<string, unknown>);
+        const text = JSON.stringify({ created: true, bucket: formatted }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: params.name,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ created: true, bucket: formatted }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -224,6 +233,7 @@ export function registerR2Tools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -235,14 +245,22 @@ export function registerR2Tools(server: McpServer): void {
           body as unknown as Parameters<typeof client.r2.buckets.delete>[1]
         );
 
+        const text = JSON.stringify({
+          deleted: true,
+          bucket_name: params.bucket_name,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: params.bucket_name,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              deleted: true,
-              bucket_name: params.bucket_name,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

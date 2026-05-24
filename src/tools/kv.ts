@@ -337,6 +337,7 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: PutValueInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -359,8 +360,19 @@ export function registerKvTools(server: McpServer): void {
           ...(params.expiration_ttl ? { expiration_ttl: params.expiration_ttl } : {}),
         };
 
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.namespace_id}/${params.key_name}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -401,6 +413,7 @@ export function registerKvTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -410,14 +423,22 @@ export function registerKvTools(server: McpServer): void {
           { account_id: accountId } as Parameters<typeof client.kv.namespaces.values.delete>[2],
         );
 
+        const text = JSON.stringify({
+          deleted: true,
+          key: params.key_name,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.namespace_id}/${params.key_name}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              deleted: true,
-              key: params.key_name,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -447,6 +468,7 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: BulkPutInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -465,11 +487,20 @@ export function registerKvTools(server: McpServer): void {
           { account_id: accountId, body } as unknown as Parameters<typeof client.kv.namespaces.bulkUpdate>[1],
         );
 
+        const text = JSON.stringify({ written: params.entries.length }, null, 2);
+        const firstKey = params.entries[0]?.key ?? "";
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: params.entries.length,
+          target_id: `${params.namespace_id}/${firstKey}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ written: params.entries.length }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -510,6 +541,7 @@ export function registerKvTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -518,11 +550,20 @@ export function registerKvTools(server: McpServer): void {
           { account_id: accountId, body: params.keys } as unknown as Parameters<typeof client.kv.namespaces.bulkDelete>[1],
         );
 
+        const text = JSON.stringify({ deleted: params.keys.length }, null, 2);
+        const firstKey = params.keys[0] ?? "";
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: params.keys.length,
+          target_id: `${params.namespace_id}/${firstKey}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ deleted: params.keys.length }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

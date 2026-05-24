@@ -32,7 +32,10 @@ vi.mock("../src/services/cloudflare.js", () => {
       tunnels: {
         cloudflared: {
           list: vi.fn(),
-          configurations: { get: vi.fn() },
+          get: vi.fn(),
+          create: vi.fn(),
+          delete: vi.fn(),
+          configurations: { get: vi.fn(), update: vi.fn() },
           connections: { get: vi.fn() },
         },
       },
@@ -40,20 +43,29 @@ vi.mock("../src/services/cloudflare.js", () => {
     workers: {
       scripts: {
         list: vi.fn(),
-        secrets: { list: vi.fn() },
-        deployments: { get: vi.fn() },
+        secrets: { list: vi.fn(), update: vi.fn(), delete: vi.fn() },
+        deployments: { get: vi.fn(), create: vi.fn() },
         versions: { list: vi.fn() },
+        schedules: { get: vi.fn(), update: vi.fn() },
       },
     },
     pages: {
       projects: {
         list: vi.fn(),
         domains: { list: vi.fn() },
-        deployments: { list: vi.fn() },
+        deployments: { list: vi.fn(), rollback: vi.fn() },
+        purgeBuildCache: vi.fn(),
       },
     },
     dns: {
-      records: { export: vi.fn(), list: vi.fn() },
+      records: {
+        export: vi.fn(),
+        list: vi.fn(),
+        create: vi.fn(),
+        edit: vi.fn(),
+        delete: vi.fn(),
+        get: vi.fn(),
+      },
     },
     zones: {
       list: vi.fn(),
@@ -62,10 +74,16 @@ vi.mock("../src/services/cloudflare.js", () => {
       namespaces: {
         list: vi.fn(),
         keys: { list: vi.fn() },
+        values: { get: vi.fn(), update: vi.fn(), delete: vi.fn() },
+        bulkUpdate: vi.fn(),
+        bulkDelete: vi.fn(),
       },
     },
     r2: {
-      buckets: { list: vi.fn() },
+      buckets: { list: vi.fn(), get: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    },
+    cache: {
+      purge: vi.fn(),
     },
   };
   return {
@@ -743,6 +761,499 @@ describe("cf_r2_list_buckets envelope", () => {
     expect(meta.matched_total).toBe(1);
     expect(meta.filtered_by).toEqual(["per_page=100"]);
     expect(meta.next_cursor).toBe("next-bucket-cursor");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// DD-338 Phase D.2 — write-tier envelope tests for 22 promoted tools
+// ─────────────────────────────────────────────────────────────────
+
+function expectWriteMeta(
+  meta: Record<string, unknown>,
+  expectedTarget: string,
+  expectedDurability: string,
+  expectedRows: number,
+): void {
+  expect(typeof meta.latency_ms).toBe("number");
+  expect(meta.filtered_by).toEqual([]);
+  expect(meta.redactions).toEqual([]);
+  expect(meta.next_cursor).toBeNull();
+  expect(meta.rows_affected).toBe(expectedRows);
+  expect(meta.target_id).toBe(expectedTarget);
+  expect(meta.write_durability).toBe(expectedDurability);
+  expect(typeof meta.response_timestamp).toBe("string");
+  expect(meta.response_timestamp as string).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+}
+
+describe("cf_dns_create_record envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.dns as { records: { create: ReturnType<typeof vi.fn> } }).records.create.mockResolvedValue({
+      id: "rec_new",
+      type: "A",
+      name: "example.com",
+      content: "1.2.3.4",
+      ttl: 1,
+    });
+  });
+  it("emits write-tier _meta envelope", async () => {
+    const tool = getTool(server, "cf_dns_create_record");
+    const res = await tool.handler({
+      zone_id: "zone_abc",
+      type: "A",
+      name: "example.com",
+      content: "1.2.3.4",
+      ttl: 1,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_abc/rec_new", "replicated", 1);
+  });
+});
+
+describe("cf_dns_update_record envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.dns as { records: { edit: ReturnType<typeof vi.fn> } }).records.edit.mockResolvedValue({
+      id: "rec_xyz",
+      type: "A",
+      name: "example.com",
+      content: "5.6.7.8",
+      ttl: 1,
+    });
+  });
+  it("emits write-tier _meta envelope", async () => {
+    const tool = getTool(server, "cf_dns_update_record");
+    const res = await tool.handler({
+      zone_id: "zone_abc",
+      record_id: "rec_xyz",
+      content: "5.6.7.8",
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_abc/rec_xyz", "replicated", 1);
+  });
+});
+
+describe("cf_dns_delete_record envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.dns as { records: { get: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> } }).records.get
+      .mockResolvedValue({ type: "A", name: "example.com", content: "1.2.3.4" });
+    (mockClient.dns as { records: { delete: ReturnType<typeof vi.fn> } }).records.delete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed delete", async () => {
+    const tool = getTool(server, "cf_dns_delete_record");
+    const res = await tool.handler({ zone_id: "zone_abc", record_id: "rec_xyz", confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_abc/rec_xyz", "replicated", 1);
+  });
+  it("does NOT emit _meta on refusal path (confirm omitted)", async () => {
+    const tool = getTool(server, "cf_dns_delete_record");
+    const res = await tool.handler({ zone_id: "zone_abc", record_id: "rec_xyz" });
+    expect(res.content[0].text).not.toContain("_meta:");
+  });
+});
+
+describe("cf_dns_bulk_create envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.dns as { records: { create: ReturnType<typeof vi.fn> } }).records.create.mockResolvedValue({
+      id: "rec_b",
+      type: "A",
+      name: "a.example.com",
+      content: "1.1.1.1",
+      ttl: 1,
+    });
+  });
+  it("emits write-tier _meta envelope with rows_affected = success count", async () => {
+    const tool = getTool(server, "cf_dns_bulk_create");
+    const res = await tool.handler({
+      zone_id: "zone_bulk",
+      records: [
+        { type: "A", name: "a.example.com", content: "1.1.1.1", ttl: 1 },
+        { type: "A", name: "b.example.com", content: "2.2.2.2", ttl: 1 },
+      ],
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_bulk", "replicated", 2);
+  });
+});
+
+describe("cf_dns_bulk_update envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.dns as { records: { edit: ReturnType<typeof vi.fn> } }).records.edit.mockResolvedValue({
+      id: "rec_u",
+      type: "A",
+      name: "a.example.com",
+      content: "9.9.9.9",
+      ttl: 1,
+    });
+  });
+  it("emits write-tier _meta envelope with rows_affected = success count", async () => {
+    const tool = getTool(server, "cf_dns_bulk_update");
+    const res = await tool.handler({
+      zone_id: "zone_bulk",
+      records: [
+        { record_id: "rec_1", content: "9.9.9.9" },
+        { record_id: "rec_2", content: "8.8.8.8" },
+      ],
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_bulk", "replicated", 2);
+  });
+});
+
+describe("cf_kv_put envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.kv as { namespaces: { values: { update: ReturnType<typeof vi.fn> } } })
+      .namespaces.values.update.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope", async () => {
+    const tool = getTool(server, "cf_kv_put");
+    const res = await tool.handler({ namespace_id: "ns_a", key_name: "my-key", value: "hello" });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "ns_a/my-key", "central", 1);
+  });
+});
+
+describe("cf_kv_delete envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.kv as { namespaces: { values: { delete: ReturnType<typeof vi.fn> } } })
+      .namespaces.values.delete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed delete", async () => {
+    const tool = getTool(server, "cf_kv_delete");
+    const res = await tool.handler({ namespace_id: "ns_a", key_name: "my-key", confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "ns_a/my-key", "central", 1);
+  });
+});
+
+describe("cf_kv_bulk_put envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.kv as { namespaces: { bulkUpdate: ReturnType<typeof vi.fn> } })
+      .namespaces.bulkUpdate.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope with rows_affected = entries count", async () => {
+    const tool = getTool(server, "cf_kv_bulk_put");
+    const res = await tool.handler({
+      namespace_id: "ns_bulk",
+      entries: [
+        { key: "k1", value: "v1" },
+        { key: "k2", value: "v2" },
+        { key: "k3", value: "v3" },
+      ],
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "ns_bulk/k1", "central", 3);
+  });
+});
+
+describe("cf_kv_bulk_delete envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.kv as { namespaces: { bulkDelete: ReturnType<typeof vi.fn> } })
+      .namespaces.bulkDelete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope with rows_affected = keys count", async () => {
+    const tool = getTool(server, "cf_kv_bulk_delete");
+    const res = await tool.handler({
+      namespace_id: "ns_bulk",
+      keys: ["k1", "k2"],
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "ns_bulk/k1", "central", 2);
+  });
+});
+
+describe("cf_d1_execute envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.d1 as { database: { query: ReturnType<typeof vi.fn> } }).database.query.mockResolvedValue([
+      { results: [], meta: { changes: 4, duration: 7, rows_read: 0, rows_written: 4 } },
+    ]);
+  });
+  it("emits write-tier _meta envelope with rows_affected = meta.changes", async () => {
+    const tool = getTool(server, "cf_d1_execute");
+    const res = await tool.handler({
+      account_id: "acct_test",
+      database_id: "db_abc",
+      sql: "INSERT INTO users (name) VALUES ('a'), ('b'), ('c'), ('d')",
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "db_abc", "replicated", 4);
+  });
+});
+
+describe("cf_tunnel_create envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.zeroTrust as { tunnels: { cloudflared: { create: ReturnType<typeof vi.fn> } } })
+      .tunnels.cloudflared.create.mockResolvedValue({ id: "tun_new", name: "my-tunnel", status: "inactive" });
+  });
+  it("emits write-tier _meta envelope", async () => {
+    const tool = getTool(server, "cf_tunnel_create");
+    const res = await tool.handler({ name: "my-tunnel", tunnel_secret: "AAAA==" });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "tun_new", "central", 1);
+  });
+});
+
+describe("cf_tunnel_delete envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.zeroTrust as {
+      tunnels: { cloudflared: { get: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> } };
+    }).tunnels.cloudflared.get.mockResolvedValue({ name: "my-tunnel", status: "inactive" });
+    (mockClient.zeroTrust as { tunnels: { cloudflared: { delete: ReturnType<typeof vi.fn> } } })
+      .tunnels.cloudflared.delete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed delete", async () => {
+    const tool = getTool(server, "cf_tunnel_delete");
+    const res = await tool.handler({ tunnel_id: "tun_abc", confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "tun_abc", "central", 1);
+  });
+});
+
+describe("cf_tunnel_update_config envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.zeroTrust as {
+      tunnels: { cloudflared: { configurations: { update: ReturnType<typeof vi.fn> } } };
+    }).tunnels.cloudflared.configurations.update.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed update", async () => {
+    const tool = getTool(server, "cf_tunnel_update_config");
+    const res = await tool.handler({
+      tunnel_id: "tun_abc",
+      ingress: [
+        { hostname: "app.example.com", service: "http://localhost:8080" },
+        { hostname: "", service: "http_status:404" },
+      ],
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "tun_abc", "central", 1);
+  });
+});
+
+describe("cf_workers_create_deployment envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.workers as { scripts: { deployments: { create: ReturnType<typeof vi.fn> } } })
+      .scripts.deployments.create.mockResolvedValue({ id: "dep_new", versions: [], created_on: "2026-05-24T00:00:00Z" });
+  });
+  it("emits write-tier _meta envelope on confirmed deploy", async () => {
+    const tool = getTool(server, "cf_workers_create_deployment");
+    const res = await tool.handler({
+      script_name: "my-worker",
+      versions: [{ version_id: "v_1", percentage: 100 }],
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-worker/dep_new", "edge", 1);
+  });
+});
+
+describe("cf_workers_put_secret envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.workers as { scripts: { secrets: { update: ReturnType<typeof vi.fn> } } })
+      .scripts.secrets.update.mockResolvedValue({ name: "API_KEY", type: "secret_text" });
+  });
+  it("emits write-tier _meta envelope on confirmed put", async () => {
+    const tool = getTool(server, "cf_workers_put_secret");
+    const res = await tool.handler({
+      script_name: "my-worker",
+      name: "API_KEY",
+      text: "redacted-secret-value",
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-worker/API_KEY", "central", 1);
+  });
+});
+
+describe("cf_workers_delete_secret envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.workers as { scripts: { secrets: { delete: ReturnType<typeof vi.fn> } } })
+      .scripts.secrets.delete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed delete", async () => {
+    const tool = getTool(server, "cf_workers_delete_secret");
+    const res = await tool.handler({
+      script_name: "my-worker",
+      secret_name: "API_KEY",
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-worker/API_KEY", "central", 1);
+  });
+});
+
+describe("cf_workers_put_schedules envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.workers as { scripts: { schedules: { update: ReturnType<typeof vi.fn> } } })
+      .scripts.schedules.update.mockResolvedValue({
+        schedules: [{ cron: "0 0 * * *", created_on: "2026-05-24T00:00:00Z", modified_on: "2026-05-24T00:00:00Z" }],
+      });
+  });
+  it("emits write-tier _meta envelope with rows_affected = schedules count", async () => {
+    const tool = getTool(server, "cf_workers_put_schedules");
+    const res = await tool.handler({
+      script_name: "my-worker",
+      schedules: [{ cron: "0 0 * * *" }, { cron: "0 12 * * *" }],
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-worker", "central", 2);
+  });
+});
+
+describe("cf_pages_rollback envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.pages as { projects: { deployments: { rollback: ReturnType<typeof vi.fn> } } })
+      .projects.deployments.rollback.mockResolvedValue({
+        id: "dep_prev",
+        environment: "production",
+        url: "https://prev.pages.dev",
+        stages: [],
+      });
+  });
+  it("emits write-tier _meta envelope on confirmed rollback", async () => {
+    const tool = getTool(server, "cf_pages_rollback");
+    const res = await tool.handler({
+      project_name: "my-site",
+      deployment_id: "dep_prev",
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-site/dep_prev", "edge", 1);
+  });
+});
+
+describe("cf_pages_purge_build_cache envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.pages as { projects: { purgeBuildCache: ReturnType<typeof vi.fn> } })
+      .projects.purgeBuildCache.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed purge", async () => {
+    const tool = getTool(server, "cf_pages_purge_build_cache");
+    const res = await tool.handler({ project_name: "my-site", confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "my-site", "central", 1);
+  });
+});
+
+describe("cf_r2_create_bucket envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.r2 as { buckets: { create: ReturnType<typeof vi.fn> } }).buckets.create.mockResolvedValue({
+      name: "bucket-new",
+      location: "wnam",
+      storage_class: "Standard",
+      creation_date: "2026-05-24",
+    });
+  });
+  it("emits write-tier _meta envelope on confirmed create", async () => {
+    const tool = getTool(server, "cf_r2_create_bucket");
+    const res = await tool.handler({
+      name: "bucket-new",
+      storage_class: "Standard",
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "bucket-new", "central", 1);
+  });
+});
+
+describe("cf_r2_delete_bucket envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.r2 as { buckets: { delete: ReturnType<typeof vi.fn> } }).buckets.delete.mockResolvedValue({});
+  });
+  it("emits write-tier _meta envelope on confirmed delete", async () => {
+    const tool = getTool(server, "cf_r2_delete_bucket");
+    const res = await tool.handler({ bucket_name: "bucket-old", confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "bucket-old", "central", 1);
+  });
+});
+
+describe("cf_cache_purge envelope (write-tier)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    (mockClient.cache as { purge: ReturnType<typeof vi.fn> }).purge.mockResolvedValue({ id: "purge_1" });
+  });
+  it("emits write-tier _meta envelope on purge_everything", async () => {
+    const tool = getTool(server, "cf_cache_purge");
+    const res = await tool.handler({ zone_id: "zone_xyz", purge_everything: true, confirm: true });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_xyz", "edge", 1);
+  });
+  it("emits rows_affected = files.length when purging files", async () => {
+    const tool = getTool(server, "cf_cache_purge");
+    const res = await tool.handler({
+      zone_id: "zone_xyz",
+      files: ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+      confirm: true,
+    });
+    const meta = parseMeta(res.content[0].text);
+    expectWriteMeta(meta, "zone_xyz", "edge", 3);
   });
 });
 

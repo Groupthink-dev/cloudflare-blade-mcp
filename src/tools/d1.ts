@@ -356,6 +356,7 @@ export function registerD1Tools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -374,18 +375,30 @@ export function registerD1Tools(server: McpServer): void {
         const firstResult = results[0] as unknown as Record<string, unknown>;
         const meta = (firstResult?.meta ?? {}) as Record<string, unknown>;
 
+        const changes = Number(meta.changes ?? 0);
         const output = {
           executed: true,
           meta: {
-            changes: Number(meta.changes ?? 0),
+            changes,
             duration: Number(meta.duration ?? 0),
             rows_read: Number(meta.rows_read ?? 0),
             rows_written: Number(meta.rows_written ?? 0),
           },
         };
 
+        const text = JSON.stringify(output, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: changes,
+          target_id: params.database_id,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

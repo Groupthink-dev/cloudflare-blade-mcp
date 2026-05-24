@@ -413,6 +413,7 @@ export function registerWorkersTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -435,11 +436,20 @@ export function registerWorkersTools(server: McpServer): void {
         );
 
         const formatted = formatDeployment(result as unknown as Record<string, unknown>);
+        const deploymentId = String((result as unknown as Record<string, unknown>).id ?? "");
+        const text = JSON.stringify({ deployed: true, deployment: formatted }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.script_name}/${deploymentId}`,
+          write_durability: "edge",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ deployed: true, deployment: formatted }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -588,6 +598,7 @@ export function registerWorkersTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -599,15 +610,23 @@ export function registerWorkersTools(server: McpServer): void {
         });
 
         const resultObj = result as unknown as Record<string, unknown>;
+        const text = JSON.stringify({
+          updated: true,
+          name: String(resultObj.name ?? params.name),
+          type: String(resultObj.type ?? "secret_text"),
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.script_name}/${params.name}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              updated: true,
-              name: String(resultObj.name ?? params.name),
-              type: String(resultObj.type ?? "secret_text"),
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -647,6 +666,7 @@ export function registerWorkersTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -656,15 +676,23 @@ export function registerWorkersTools(server: McpServer): void {
           { account_id: accountId }
         );
 
+        const text = JSON.stringify({
+          deleted: true,
+          script: params.script_name,
+          name: params.secret_name,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.script_name}/${params.secret_name}`,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              deleted: true,
-              script: params.script_name,
-              name: params.secret_name,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -750,6 +778,7 @@ export function registerWorkersTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -762,15 +791,23 @@ export function registerWorkersTools(server: McpServer): void {
         const schedules = Array.isArray(resultObj.schedules) ? resultObj.schedules : [];
         const formatted = formatSchedules(schedules);
 
+        const text = JSON.stringify({
+          updated: true,
+          script_name: params.script_name,
+          schedules: formatted,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: params.schedules.length,
+          target_id: params.script_name,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              updated: true,
-              script_name: params.script_name,
-              schedules: formatted,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
