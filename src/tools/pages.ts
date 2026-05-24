@@ -53,6 +53,7 @@ export function registerPagesTools(server: McpServer): void {
     },
     async (params: ListProjectsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -64,7 +65,15 @@ export function registerPagesTools(server: McpServer): void {
         const formatted = formatProjects(projects);
         const output = { total: formatted.length, projects: formatted };
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
@@ -130,6 +139,7 @@ export function registerPagesTools(server: McpServer): void {
     },
     async (params: ListPagesDeploymentsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -146,8 +156,18 @@ export function registerPagesTools(server: McpServer): void {
 
         const formatted = formatPageDeployments(deployments);
         const output = { total: formatted.length, deployments: formatted };
+        const filteredBy: string[] = [`project_name=${params.project_name}`];
+        if (params.env) filteredBy.push(`env=${params.env}`);
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: filteredBy,
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

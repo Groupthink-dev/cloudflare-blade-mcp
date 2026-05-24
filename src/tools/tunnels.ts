@@ -47,6 +47,7 @@ export function registerTunnelTools(server: McpServer): void {
     },
     async (params: ListTunnelsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -84,8 +85,23 @@ export function registerTunnelTools(server: McpServer): void {
           tunnels: formatted,
         };
 
+        const filteredBy: string[] = [
+          `is_deleted=${params.is_deleted}`,
+          `page=${params.page}`,
+          `per_page=${params.per_page}`,
+        ];
+        if (params.name) filteredBy.push(`name=${params.name}`);
+
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: total,
+          returned: formatted.length,
+          filtered_by: filteredBy,
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

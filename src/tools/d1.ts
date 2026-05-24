@@ -65,6 +65,7 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: ListDatabasesInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -90,7 +91,15 @@ export function registerD1Tools(server: McpServer): void {
         };
 
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: databases.length,
+          returned: databases.length,
+          filtered_by: [`page=${params.page}`, `per_page=${params.per_page}`],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

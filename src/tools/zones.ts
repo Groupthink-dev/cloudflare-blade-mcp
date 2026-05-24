@@ -8,6 +8,7 @@ import { buildPaginationMeta, truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
 import { ListZonesSchema, GetZoneSchema } from "../schemas/zones.js";
 import type { ListZonesInput, GetZoneInput } from "../schemas/zones.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 
 export function registerZoneTools(server: McpServer): void {
   // ─── cf_dns_list_zones ───────────────────────────────────────
@@ -30,6 +31,7 @@ export function registerZoneTools(server: McpServer): void {
     },
     async (params: ListZonesInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const concise = params.include_details ? false : params.concise;
 
@@ -62,8 +64,21 @@ export function registerZoneTools(server: McpServer): void {
           zones: paged,
         };
 
+        const filteredBy: string[] = [`page=${params.page}`, `per_page=${params.per_page}`];
+        if (params.filter_name) filteredBy.push(`name=${params.filter_name}`);
+        if (params.filter_status) filteredBy.push(`status=${params.filter_status}`);
+        if (params.filter_account_id) filteredBy.push(`account_id=${params.filter_account_id}`);
+
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: total,
+          returned: paged.length,
+          filtered_by: filteredBy,
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],

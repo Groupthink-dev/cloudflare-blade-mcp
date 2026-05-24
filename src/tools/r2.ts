@@ -7,6 +7,7 @@ import { getClient, getAccountId } from "../services/cloudflare.js";
 import { formatBucket, formatBuckets } from "../formatters/r2.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 import {
   ListBucketsSchema,
   GetBucketSchema,
@@ -39,6 +40,7 @@ export function registerR2Tools(server: McpServer): void {
     },
     async (params: ListBucketsInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -67,8 +69,20 @@ export function registerR2Tools(server: McpServer): void {
           output.next_cursor = resultObj.cursor;
         }
 
+        const filteredBy: string[] = [`per_page=${params.per_page}`];
+        if (params.name_contains) filteredBy.push(`name_contains=${params.name_contains}`);
+        if (params.cursor) filteredBy.push(`cursor=${params.cursor}`);
+
         const text = truncateIfNeeded(JSON.stringify(output, null, 2));
-        return { content: [{ type: "text" as const, text }] };
+        const metaLine = formatMetaLine({
+          matched_total: formatted.length,
+          returned: formatted.length,
+          filtered_by: filteredBy,
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: (resultObj.cursor as string | undefined) ?? null,
+        });
+        return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: handleApiError(error) }],
