@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient } from "../services/cloudflare.js";
 import { formatRecord } from "../formatters/record.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 import {
   CreateRecordSchema,
   UpdateRecordSchema,
@@ -39,6 +40,7 @@ export function registerRecordWriteTools(server: McpServer): void {
     },
     async (params: CreateRecordInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
 
         // Build the create payload
@@ -61,11 +63,20 @@ export function registerRecordWriteTools(server: McpServer): void {
         } as Parameters<typeof client.dns.records.create>[0]);
 
         const formatted = formatRecord(record as unknown as Record<string, unknown>, true);
+        const recordId = String((record as unknown as Record<string, unknown>).id ?? "");
+        const text = JSON.stringify({ created: true, record: formatted }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.zone_id}/${recordId}`,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ created: true, record: formatted }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -97,6 +108,7 @@ export function registerRecordWriteTools(server: McpServer): void {
     },
     async (params: UpdateRecordInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
 
         // Build patch payload — only include fields that were provided
@@ -125,11 +137,19 @@ export function registerRecordWriteTools(server: McpServer): void {
         } as Parameters<typeof client.dns.records.edit>[1]);
 
         const formatted = formatRecord(record as unknown as Record<string, unknown>, true);
+        const text = JSON.stringify({ updated: true, record: formatted }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.zone_id}/${params.record_id}`,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ updated: true, record: formatted }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -172,6 +192,7 @@ export function registerRecordWriteTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
 
         // Fetch the record first so we can show what was deleted
@@ -190,15 +211,23 @@ export function registerRecordWriteTools(server: McpServer): void {
           zone_id: params.zone_id,
         });
 
+        const text = JSON.stringify({
+          deleted: true,
+          record_id: params.record_id,
+          was: recordInfo,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: `${params.zone_id}/${params.record_id}`,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              deleted: true,
-              record_id: params.record_id,
-              was: recordInfo,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

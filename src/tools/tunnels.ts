@@ -168,6 +168,7 @@ export function registerTunnelTools(server: McpServer): void {
     },
     async (params: CreateTunnelInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -183,11 +184,20 @@ export function registerTunnelTools(server: McpServer): void {
         );
 
         const formatted = formatTunnel(tunnel as unknown as Record<string, unknown>, true);
+        const tunnelId = String((tunnel as unknown as Record<string, unknown>).id ?? "");
+        const text = JSON.stringify({ created: true, tunnel: formatted }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: tunnelId,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ created: true, tunnel: formatted }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -229,6 +239,7 @@ export function registerTunnelTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -248,15 +259,23 @@ export function registerTunnelTools(server: McpServer): void {
           account_id: accountId,
         });
 
+        const text = JSON.stringify({
+          deleted: true,
+          tunnel_id: params.tunnel_id,
+          was: tunnelInfo,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: params.tunnel_id,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              deleted: true,
-              tunnel_id: params.tunnel_id,
-              was: tunnelInfo,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -356,6 +375,7 @@ export function registerTunnelTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
 
@@ -379,15 +399,23 @@ export function registerTunnelTools(server: McpServer): void {
 
         const formatted = params.ingress.map((rule) => formatIngressRule(rule as unknown as Record<string, unknown>));
 
+        const text = JSON.stringify({
+          updated: true,
+          tunnel_id: params.tunnel_id,
+          ingress: formatted,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: 1,
+          target_id: params.tunnel_id,
+          write_durability: "central",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              updated: true,
-              tunnel_id: params.tunnel_id,
-              ingress: formatted,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

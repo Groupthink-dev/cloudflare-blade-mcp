@@ -4,6 +4,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient } from "../services/cloudflare.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 import { CachePurgeSchema } from "../schemas/cache.js";
 import type { CachePurgeInput } from "../schemas/cache.js";
 
@@ -71,6 +72,7 @@ export function registerCacheTools(server: McpServer): void {
           };
         }
 
+        const t0 = performance.now();
         const client = getClient();
         const mode = modes[0]!;
 
@@ -88,15 +90,39 @@ export function registerCacheTools(server: McpServer): void {
 
         const resultObj = result as unknown as Record<string, unknown> | null;
 
+        // Compute rows_affected from the mode's target set when present
+        let rowsAffected: number;
+        if (params.purge_everything) {
+          rowsAffected = 1;
+        } else if (params.files?.length) {
+          rowsAffected = params.files.length;
+        } else if (params.tags?.length) {
+          rowsAffected = params.tags.length;
+        } else if (params.hosts?.length) {
+          rowsAffected = params.hosts.length;
+        } else if (params.prefixes?.length) {
+          rowsAffected = params.prefixes.length;
+        } else {
+          rowsAffected = 1;
+        }
+
+        const text = JSON.stringify({
+          purged: true,
+          id: resultObj?.id ?? null,
+          mode,
+        }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: rowsAffected,
+          target_id: params.zone_id,
+          write_durability: "edge",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              purged: true,
-              id: resultObj?.id ?? null,
-              mode,
-            }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {

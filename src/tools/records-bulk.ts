@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getClient } from "../services/cloudflare.js";
 import { formatRecord } from "../formatters/record.js";
 import { handleApiError } from "../utils/errors.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 import { BulkCreateSchema, BulkUpdateSchema } from "../schemas/records.js";
 import type { BulkCreateInput, BulkUpdateInput } from "../schemas/records.js";
 
@@ -30,6 +31,7 @@ export function registerBulkTools(server: McpServer): void {
     },
     async (params: BulkCreateInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const results: Array<{
           index: number;
@@ -70,11 +72,19 @@ export function registerBulkTools(server: McpServer): void {
           }
         }
 
+        const text = JSON.stringify({ created, failed, total: params.records.length, results }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: created,
+          target_id: params.zone_id,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ created, failed, total: params.records.length, results }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
@@ -105,6 +115,7 @@ export function registerBulkTools(server: McpServer): void {
     },
     async (params: BulkUpdateInput) => {
       try {
+        const t0 = performance.now();
         const client = getClient();
         const results: Array<{
           index: number;
@@ -143,11 +154,19 @@ export function registerBulkTools(server: McpServer): void {
           }
         }
 
+        const text = JSON.stringify({ updated, failed, total: params.records.length, results }, null, 2);
+        const metaLine = formatMetaLine({
+          filtered_by: [],
+          latency_ms: Math.round(performance.now() - t0),
+          redactions: [],
+          next_cursor: null,
+          rows_affected: updated,
+          target_id: params.zone_id,
+          write_durability: "replicated",
+          response_timestamp: new Date().toISOString(),
+        });
         return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({ updated, failed, total: params.records.length, results }, null, 2),
-          }],
+          content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
         };
       } catch (error) {
         return {
