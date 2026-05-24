@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-blade-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Cloudflare platform MCP server — DNS, KV, D1, Tunnels, Workers, Pages, R2, Vectorize, AI, Cache with token-efficient defaults",
   "type": "module",
   "main": "dist/index.js",
@@ -37,6 +37,7 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "cloudflare": "^4.5.0",
     "hono": "^4.7.0",
+    "stallari-mcp-helpers": "^0.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

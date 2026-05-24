@@ -7,7 +7,7 @@ import { getClient, getAccountId } from "../services/cloudflare.js";
 import { formatTunnel, formatTunnels, formatConnection, formatIngressRule } from "../formatters/tunnel.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
-import { formatMetaLine, appendMeta } from "../utils/meta.js";
+import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListTunnelsSchema,
   GetTunnelSchema,
@@ -294,6 +294,8 @@ export function registerTunnelTools(server: McpServer): void {
           returned: formatted.length,
           filtered_by: [`tunnel_id=${params.tunnel_id}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
@@ -426,6 +428,8 @@ export function registerTunnelTools(server: McpServer): void {
           returned: formatted.length,
           filtered_by: [`tunnel_id=${params.tunnel_id}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
