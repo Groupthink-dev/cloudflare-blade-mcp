@@ -1,11 +1,20 @@
 /**
- * DD-338 Phase C Wave 3 — `_meta` envelope helper unit tests.
+ * DD-338 Phase E.ts — `_meta` envelope helper wire-shape tests.
  *
- * Covers `formatMetaLine` + `appendMeta` from `src/utils/meta.ts`.
- * Wire shape canonical per spec 2026-05-21-dd-338-a1-mastodon.md.
+ * Covers `formatMetaLine` + `appendMeta` imported from the canonical
+ * `stallari-mcp-helpers` npm package (substrate swap from local
+ * `src/utils/meta.ts` in DD-338 Phase E.ts).
+ *
+ * Wire shape locked per DD-338 Phase A.1 contract; canonical lib emits
+ * `redactions` + `next_cursor` ALWAYS-PRESENT (was: omit-when-empty in
+ * the prior local helper). `error_notes` stays omit-when-empty. Per-blade
+ * wire-shape tests here pin the contract surface that cloudflare tool
+ * handlers depend on. Field-presence + ordering invariants are the
+ * canonical lib's to own (its own test suite); this file pins
+ * consumer-facing behaviour.
  */
 import { describe, it, expect } from "vitest";
-import { formatMetaLine, appendMeta } from "../src/utils/meta.js";
+import { formatMetaLine, appendMeta } from "stallari-mcp-helpers";
 
 describe("formatMetaLine", () => {
   it("emits required fields in canonical order", () => {
@@ -14,9 +23,11 @@ describe("formatMetaLine", () => {
       returned: 10,
       filtered_by: ["limit=10"],
       latency_ms: 123,
+      redactions: [],
+      next_cursor: null,
     });
     expect(line).toBe(
-      `_meta: {"matched_total":42,"returned":10,"filtered_by":["limit=10"],"latency_ms":123}`,
+      `_meta: {"matched_total":42,"returned":10,"filtered_by":["limit=10"],"latency_ms":123,"redactions":[],"next_cursor":null}`,
     );
   });
 
@@ -26,6 +37,8 @@ describe("formatMetaLine", () => {
       returned: 1,
       filtered_by: ["zone_id=z", "limit=10", "account_id=a"],
       latency_ms: 1,
+      redactions: [],
+      next_cursor: null,
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
     expect(parsed.filtered_by).toEqual([
@@ -35,15 +48,17 @@ describe("formatMetaLine", () => {
     ]);
   });
 
-  it("drops empty redactions array", () => {
+  it("always emits redactions when empty", () => {
     const line = formatMetaLine({
       matched_total: 0,
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
       redactions: [],
+      next_cursor: null,
     });
-    expect(line).not.toContain("redactions");
+    const parsed = JSON.parse(line.replace(/^_meta: /, ""));
+    expect(parsed.redactions).toEqual([]);
   });
 
   it("keeps non-empty redactions", () => {
@@ -53,30 +68,23 @@ describe("formatMetaLine", () => {
       filtered_by: [],
       latency_ms: 0,
       redactions: ["next_cursor_unavailable"],
+      next_cursor: null,
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
     expect(parsed.redactions).toEqual(["next_cursor_unavailable"]);
   });
 
-  it("drops null next_cursor", () => {
+  it("always emits next_cursor when null", () => {
     const line = formatMetaLine({
       matched_total: 0,
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
       next_cursor: null,
     });
-    expect(line).not.toContain("next_cursor");
-  });
-
-  it("drops undefined next_cursor", () => {
-    const line = formatMetaLine({
-      matched_total: 0,
-      returned: 0,
-      filtered_by: [],
-      latency_ms: 0,
-    });
-    expect(line).not.toContain("next_cursor");
+    const parsed = JSON.parse(line.replace(/^_meta: /, ""));
+    expect(parsed.next_cursor).toBeNull();
   });
 
   it("keeps empty-string next_cursor", () => {
@@ -85,6 +93,7 @@ describe("formatMetaLine", () => {
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
       next_cursor: "",
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
@@ -97,18 +106,21 @@ describe("formatMetaLine", () => {
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
       next_cursor: "abc123",
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
     expect(parsed.next_cursor).toBe("abc123");
   });
 
-  it("drops empty error_notes", () => {
+  it("drops empty error_notes (still omit-when-empty)", () => {
     const line = formatMetaLine({
       matched_total: 0,
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
+      next_cursor: null,
       error_notes: [],
     });
     expect(line).not.toContain("error_notes");
@@ -120,6 +132,8 @@ describe("formatMetaLine", () => {
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
+      next_cursor: null,
       error_notes: ["partial_results: 1 region unavailable"],
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
@@ -134,6 +148,8 @@ describe("formatMetaLine", () => {
       returned: 0,
       filtered_by: [],
       latency_ms: 12.7,
+      redactions: [],
+      next_cursor: null,
     });
     const parsed = JSON.parse(line.replace(/^_meta: /, ""));
     expect(parsed.latency_ms).toBe(13);
@@ -159,6 +175,8 @@ describe("formatMetaLine", () => {
       returned: 0,
       filtered_by: [],
       latency_ms: 0,
+      redactions: [],
+      next_cursor: null,
     });
     expect(line.slice(0, 7)).toBe("_meta: ");
   });

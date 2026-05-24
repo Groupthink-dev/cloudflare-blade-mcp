@@ -20,7 +20,7 @@ import {
 } from "../formatters/workers.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
-import { formatMetaLine, appendMeta } from "../utils/meta.js";
+import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListScriptsSchema,
   GetScriptSchema,
@@ -513,6 +513,8 @@ export function registerWorkersTools(server: McpServer): void {
           returned: formatted.length,
           filtered_by: [`script_name=${params.script_name}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],

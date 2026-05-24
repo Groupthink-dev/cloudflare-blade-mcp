@@ -14,7 +14,7 @@ import {
 } from "../formatters/pages.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
-import { formatMetaLine, appendMeta } from "../utils/meta.js";
+import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListProjectsSchema,
   GetProjectSchema,
@@ -290,6 +290,8 @@ export function registerPagesTools(server: McpServer): void {
           returned: formatted.length,
           filtered_by: [`project_name=${params.project_name}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],

@@ -6,7 +6,7 @@ import { getClient } from "../services/cloudflare.js";
 import { formatRecord, formatRecords, buildRecordSummary } from "../formatters/record.js";
 import { buildPaginationMeta, truncateIfNeeded, randomSample } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
-import { formatMetaLine, appendMeta } from "../utils/meta.js";
+import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListRecordsSchema,
   GetRecordSchema,
@@ -193,6 +193,8 @@ export function registerRecordReadTools(server: McpServer): void {
           returned: recordLines,
           filtered_by: [`zone_id=${params.zone_id}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(truncated, metaLine) }],

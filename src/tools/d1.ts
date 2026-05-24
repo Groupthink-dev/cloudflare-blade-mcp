@@ -8,7 +8,7 @@ import { getClient, getAccountId, cloudflareRequest } from "../services/cloudfla
 import { formatDatabase, formatDatabases, formatQueryResult } from "../formatters/d1.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
-import { formatMetaLine, appendMeta } from "../utils/meta.js";
+import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListDatabasesSchema,
   GetDatabaseSchema,
@@ -290,6 +290,8 @@ export function registerD1Tools(server: McpServer): void {
             `sql=${sqlHash(params.sql)}`,
           ],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
       } catch (error) {
@@ -466,6 +468,8 @@ export function registerD1Tools(server: McpServer): void {
           returned: tableInfo.length,
           filtered_by: [`database_id=${params.database_id}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
           error_notes: errorNotes,
         });
         return { content: [{ type: "text" as const, text: appendMeta(text, metaLine) }] };
@@ -551,6 +555,8 @@ export function registerD1Tools(server: McpServer): void {
           returned: tables.length,
           filtered_by: [`database_id=${params.database_id}`],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
           error_notes: countFailed.map((n) => `count_failed:${n}`),
         });
         return {
@@ -625,6 +631,8 @@ export function registerD1Tools(server: McpServer): void {
             `table_name=${params.table_name}`,
           ],
           latency_ms: latencyMs,
+          redactions: [],
+          next_cursor: null,
         });
         return {
           content: [{ type: "text" as const, text: appendMeta(text, metaLine) }],
