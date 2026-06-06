@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-blade-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Cloudflare platform MCP server — DNS, KV, D1, Tunnels, Workers, Pages, R2, Vectorize, AI, Cache with token-efficient defaults",
   "type": "module",
   "main": "dist/index.js",

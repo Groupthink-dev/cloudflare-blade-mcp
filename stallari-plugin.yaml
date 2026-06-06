@@ -1,9 +1,20 @@
 name: cloudflare-blade-mcp
-version: "0.3.0"
+version: "0.7.1"
 description: "Manage your Cloudflare stack — DNS, Workers, Pages, R2, KV, D1, Tunnels, Vectorize, AI, and cache purge. 78 tools with token-efficient output and safety gates on all writes."
 author: groupthink-dev
 license: MIT
 tier: certified
+author_type: first-party
+# DD-385 live-hardening certification PASSED 2026-06-06 (v0.7.1). Live CRUD
+# round-trips (create→read→update→delete, throwaway resources, verified
+# teardown) ran clean with ZERO defects across DNS + KV + R2 + D1 + Vectorize +
+# Tunnels — the blade is SDK-typed (no parse rot) and uses PATCH updates (no
+# read-merge hazard). Also: catalog reconciled to all 78 tools (12 destructive
+# deletes → high_risk; honest audit_surface) + http loopback-bind hardening.
+# Documented residuals (not blade defects): AI Gateway tools need a token with
+# AI-Gateway scope (current token → 403); Workers/Pages WRITE paths were not
+# live-fired (would mutate real deployments). Reads on all surfaces verified.
+readiness: production
 homepage: https://github.com/groupthink-dev/cloudflare-blade-mcp
 
 # DD-181 Wave 2: edge-platform-v1/v2 was retired in pack-spec 2.0.0. Cloudflare

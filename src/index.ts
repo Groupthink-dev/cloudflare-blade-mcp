@@ -117,16 +117,28 @@ async function runHttp(): Promise<void> {
     );
   });
 
-  // Start the Node.js HTTP server using Hono's serve helper
+  // Start the Node.js HTTP server using Hono's serve helper.
+  // Bind loopback by default — the blade mutates DNS / R2 / Workers, so the
+  // http surface must not land on a public interface unless the operator
+  // explicitly opts in via HOST (blade-mcp transport policy, DD-242 /
+  // access-policy). `@hono/node-server` otherwise defaults to all-interfaces.
+  const hostname = process.env.HOST || "127.0.0.1";
+  if (hostname !== "127.0.0.1" && hostname !== "::1" && hostname !== "localhost" && !getBearerToken()) {
+    console.error(
+      `  ✗ Refusing to bind HTTP to non-loopback host ${hostname} without MCP_API_TOKEN. ` +
+        `Set a bearer token, or bind loopback (unset HOST).`
+    );
+    process.exit(1);
+  }
   const { serve } = await import("@hono/node-server");
-  serve({ fetch: app.fetch, port }, () => {
+  serve({ fetch: app.fetch, port, hostname }, () => {
     if (getBearerToken()) {
       console.error("  ✓ Bearer token auth enabled (MCP_API_TOKEN is set)");
     } else {
-      console.error("  ⚠ Bearer token auth disabled (no MCP_API_TOKEN)");
+      console.error("  ⚠ Bearer token auth disabled (no MCP_API_TOKEN); X-API-Key still required");
     }
-    console.error(`  ✓ MCP server running at http://localhost:${port}/mcp`);
-    console.error(`  ✓ Health check at http://localhost:${port}/health`);
+    console.error(`  ✓ MCP server running at http://${hostname}:${port}/mcp`);
+    console.error(`  ✓ Health check at http://${hostname}:${port}/health`);
   });
 }
 

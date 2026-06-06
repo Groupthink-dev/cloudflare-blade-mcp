@@ -330,6 +330,24 @@ Existing consumers that string-match the JSON payload front are forward-compatib
 the envelope is purely additive. `cf_d1_query` redacts the raw SQL to a sha256-12
 base64-urlsafe digest (`sql=<12 chars>`) for privacy and token economy.
 
+## DD-385 live-hardening (v0.7.1)
+
+`readiness: production` — certification passed 2026-06-06. Live create→read→update→delete
+round-trips (throwaway resources, verified teardown) ran clean with **zero defects**
+across DNS, KV, R2, D1, Vectorize, and Tunnels. The blade is SDK-typed (no response-parse
+rot) and uses PATCH for DNS updates (no read-merge echo hazard). This pass also:
+
+- **Reconciled the catalog** to all **78 tools** (it previously declared 53 — the
+  AI-Gateway / Vectorize / Workers-AI surfaces were undeclared).
+- **Re-classed the 12 destructive deletes** (R2 bucket, D1 database, KV namespace,
+  Vectorize index, …) from `external_side_effect` → `high_risk`.
+- **Hardened the HTTP transport** to bind loopback by default (was all-interfaces) and
+  refuse a non-loopback bind without a bearer token (DD-242).
+
+Documented residuals (not blade defects): AI-Gateway tools need a token carrying
+AI-Gateway scope (current token → `403`); Workers/Pages **write** paths were not
+live-fired (they would mutate real deployments). All reads verified.
+
 ## Stallari Marketplace
 
 This MCP conforms to the `edge-platform-v2` service contract (78/78 operations) across ten service domains: `dns`, `kv`, `d1`, `tunnel`, `workers`, `pages`, `r2`, `vectorize`, `ai`, `cache`.
