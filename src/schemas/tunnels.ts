@@ -54,6 +54,12 @@ export const CreateTunnelSchema = AccountIdSchema.extend({
     .describe(
       "Configuration source: 'cloudflare' (managed via API/dashboard) or 'local' (managed by cloudflared config file). Default: cloudflare."
     ),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental tunnel creation."
+    ),
 }).strict();
 
 export type CreateTunnelInput = z.infer<typeof CreateTunnelSchema>;

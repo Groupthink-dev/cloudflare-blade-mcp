@@ -110,6 +110,12 @@ export const PutValueSchema = AccountIdSchema.extend({
     .record(z.unknown())
     .optional()
     .describe("Arbitrary JSON metadata to attach to the key."),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental overwrites of existing KV values."
+    ),
 }).strict();
 
 export type PutValueInput = z.infer<typeof PutValueSchema>;
@@ -159,6 +165,12 @@ export const BulkPutSchema = AccountIdSchema.extend({
     .min(1)
     .max(10000)
     .describe("Array of key-value pairs to write (max 10,000 per call)."),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental bulk overwrites of existing KV values."
+    ),
 }).strict();
 
 export type BulkPutInput = z.infer<typeof BulkPutSchema>;

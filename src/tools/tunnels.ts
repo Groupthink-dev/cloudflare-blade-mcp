@@ -157,6 +157,7 @@ export function registerTunnelTools(server: McpServer): void {
       description:
         `Create a new Cloudflare Tunnel. Requires a unique name and a base64-encoded secret.\n\n` +
         `Generate a secret: openssl rand -base64 32\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: { created: true, tunnel: { id, name, status, ... } }`,
       inputSchema: CreateTunnelSchema,
       annotations: {
@@ -168,6 +169,17 @@ export function registerTunnelTools(server: McpServer): void {
     },
     async (params: CreateTunnelInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Create aborted. You must set confirm=true to create a tunnel.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);

@@ -806,6 +806,7 @@ describe("cf_dns_create_record envelope (write-tier)", () => {
       name: "example.com",
       content: "1.2.3.4",
       ttl: 1,
+      confirm: true,
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "zone_abc/rec_new", "replicated", 1);
@@ -831,6 +832,7 @@ describe("cf_dns_update_record envelope (write-tier)", () => {
       zone_id: "zone_abc",
       record_id: "rec_xyz",
       content: "5.6.7.8",
+      confirm: true,
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "zone_abc/rec_xyz", "replicated", 1);
@@ -880,6 +882,7 @@ describe("cf_dns_bulk_create envelope (write-tier)", () => {
         { type: "A", name: "a.example.com", content: "1.1.1.1", ttl: 1 },
         { type: "A", name: "b.example.com", content: "2.2.2.2", ttl: 1 },
       ],
+      confirm: true,
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "zone_bulk", "replicated", 2);
@@ -907,6 +910,7 @@ describe("cf_dns_bulk_update envelope (write-tier)", () => {
         { record_id: "rec_1", content: "9.9.9.9" },
         { record_id: "rec_2", content: "8.8.8.8" },
       ],
+      confirm: true,
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "zone_bulk", "replicated", 2);
@@ -923,7 +927,7 @@ describe("cf_kv_put envelope (write-tier)", () => {
   });
   it("emits write-tier _meta envelope", async () => {
     const tool = getTool(server, "cf_kv_put");
-    const res = await tool.handler({ namespace_id: "ns_a", key_name: "my-key", value: "hello" });
+    const res = await tool.handler({ namespace_id: "ns_a", key_name: "my-key", value: "hello", confirm: true });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "ns_a/my-key", "central", 1);
   });
@@ -962,6 +966,7 @@ describe("cf_kv_bulk_put envelope (write-tier)", () => {
         { key: "k2", value: "v2" },
         { key: "k3", value: "v3" },
       ],
+      confirm: true,
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "ns_bulk/k1", "central", 3);
@@ -1020,7 +1025,7 @@ describe("cf_tunnel_create envelope (write-tier)", () => {
   });
   it("emits write-tier _meta envelope", async () => {
     const tool = getTool(server, "cf_tunnel_create");
-    const res = await tool.handler({ name: "my-tunnel", tunnel_secret: "AAAA==" });
+    const res = await tool.handler({ name: "my-tunnel", tunnel_secret: "AAAA==", confirm: true });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "tun_new", "central", 1);
   });
@@ -1254,6 +1259,128 @@ describe("cf_cache_purge envelope (write-tier)", () => {
     });
     const meta = parseMeta(res.content[0].text);
     expectWriteMeta(meta, "zone_xyz", "edge", 3);
+  });
+});
+
+describe("cf_d1_query read-only gate (AUD-04-03)", () => {
+  let server: McpServer;
+  let queryMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+    queryMock = (mockClient.d1 as { database: { query: ReturnType<typeof vi.fn> } }).database.query;
+    queryMock.mockResolvedValue([
+      { results: [{ id: 1 }], meta: { duration: 1, rows_read: 1, rows_written: 0 } },
+    ]);
+  });
+
+  async function expectRejected(sql: string) {
+    const tool = getTool(server, "cf_d1_query");
+    const res = await tool.handler({ account_id: "acct_test", database_id: "db-abc", sql });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("cf_d1_execute");
+    expect(queryMock).not.toHaveBeenCalled();
+  }
+
+  it("rejects INSERT", async () => {
+    await expectRejected("INSERT INTO users (name) VALUES ('x')");
+  });
+
+  it("rejects UPDATE", async () => {
+    await expectRejected("UPDATE users SET name = 'x' WHERE id = 1");
+  });
+
+  it("rejects DROP TABLE", async () => {
+    await expectRejected("DROP TABLE users");
+  });
+
+  it("rejects multi-statement SQL", async () => {
+    await expectRejected("SELECT 1; DROP TABLE users");
+  });
+
+  it("rejects comment-prefixed mutation", async () => {
+    await expectRejected("/* read */ DELETE FROM users");
+    await expectRejected("-- just a select, honest\nINSERT INTO users VALUES (1)");
+  });
+
+  it("rejects WITH ... INSERT", async () => {
+    await expectRejected("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x");
+  });
+
+  it("accepts SELECT and reaches the API", async () => {
+    const tool = getTool(server, "cf_d1_query");
+    const res = await tool.handler({
+      account_id: "acct_test",
+      database_id: "db-abc",
+      sql: "SELECT * FROM users",
+    });
+    expect(res.isError).toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts WITH ... SELECT and reaches the API", async () => {
+    const tool = getTool(server, "cf_d1_query");
+    const res = await tool.handler({
+      account_id: "acct_test",
+      database_id: "db-abc",
+      sql: "WITH recent AS (SELECT * FROM users) SELECT * FROM recent",
+    });
+    expect(res.isError).toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("write confirm gates — refusal paths (AUD-04-34)", () => {
+  let server: McpServer;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    server = createServer();
+  });
+
+  async function expectRefused(name: string, args: Record<string, unknown>) {
+    const tool = getTool(server, name);
+    const res = await tool.handler(args);
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("confirm=true");
+    expect(res.content[0].text).not.toContain("_meta:");
+  }
+
+  it("cf_dns_create_record refuses without confirm", async () => {
+    await expectRefused("cf_dns_create_record", {
+      zone_id: "z1", type: "A", name: "www", content: "1.2.3.4", ttl: 1,
+    });
+  });
+
+  it("cf_dns_update_record refuses without confirm", async () => {
+    await expectRefused("cf_dns_update_record", {
+      zone_id: "z1", record_id: "r1", content: "5.6.7.8",
+    });
+  });
+
+  it("cf_dns_bulk_create refuses without confirm", async () => {
+    await expectRefused("cf_dns_bulk_create", {
+      zone_id: "z1", records: [{ type: "A", name: "a", content: "1.1.1.1", ttl: 1 }],
+    });
+  });
+
+  it("cf_dns_bulk_update refuses without confirm", async () => {
+    await expectRefused("cf_dns_bulk_update", {
+      zone_id: "z1", records: [{ record_id: "r1", content: "9.9.9.9" }],
+    });
+  });
+
+  it("cf_kv_put refuses without confirm", async () => {
+    await expectRefused("cf_kv_put", { namespace_id: "ns1", key_name: "k", value: "v" });
+  });
+
+  it("cf_kv_bulk_put refuses without confirm", async () => {
+    await expectRefused("cf_kv_bulk_put", {
+      namespace_id: "ns1", entries: [{ key: "k", value: "v" }],
+    });
+  });
+
+  it("cf_tunnel_create refuses without confirm", async () => {
+    await expectRefused("cf_tunnel_create", { name: "t1", tunnel_secret: "AAAA==" });
   });
 });
 

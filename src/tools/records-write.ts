@@ -29,6 +29,7 @@ export function registerRecordWriteTools(server: McpServer): void {
         `Required: zone_id, type, name, content.\n` +
         `Optional: ttl (1=auto), proxied (A/AAAA/CNAME only), priority (MX), comment, tags.\n` +
         `For complex types (SRV, CAA, CERT), use the 'data' field with structured JSON.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: the created record in concise format.`,
       inputSchema: CreateRecordSchema,
       annotations: {
@@ -40,6 +41,17 @@ export function registerRecordWriteTools(server: McpServer): void {
     },
     async (params: CreateRecordInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Create aborted. You must set confirm=true to create a DNS record.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
 
@@ -97,6 +109,7 @@ export function registerRecordWriteTools(server: McpServer): void {
         `Only the fields you provide will be changed; others remain untouched.\n\n` +
         `Required: zone_id, record_id.\n` +
         `Updatable: content, name, ttl, proxied, comment, tags, data.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: the updated record in concise format.`,
       inputSchema: UpdateRecordSchema,
       annotations: {
@@ -108,6 +121,17 @@ export function registerRecordWriteTools(server: McpServer): void {
     },
     async (params: UpdateRecordInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Update aborted. You must set confirm=true to update a DNS record.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
 

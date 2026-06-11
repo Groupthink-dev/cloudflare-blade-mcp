@@ -326,6 +326,7 @@ export function registerKvTools(server: McpServer): void {
         `Write a key-value pair to a Workers KV namespace. ` +
         `Overwrites the key if it already exists.\n\n` +
         `Optional: expiration_ttl (seconds, min 60), metadata (JSON object).\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: { written: true, key: "..." }`,
       inputSchema: PutValueSchema,
       annotations: {
@@ -337,6 +338,17 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: PutValueInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Put aborted. You must set confirm=true to write a KV value.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);
@@ -457,6 +469,7 @@ export function registerKvTools(server: McpServer): void {
       description:
         `Write up to 10,000 key-value pairs to a Workers KV namespace in a single operation.\n\n` +
         `Each entry needs: key, value. Optional: expiration_ttl, metadata.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: { written: N }`,
       inputSchema: BulkPutSchema,
       annotations: {
@@ -468,6 +481,17 @@ export function registerKvTools(server: McpServer): void {
     },
     async (params: BulkPutInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Bulk put aborted. You must set confirm=true to bulk-write KV values.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);

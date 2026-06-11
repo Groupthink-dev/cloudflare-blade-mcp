@@ -8,6 +8,7 @@ import { getClient, getAccountId, cloudflareRequest } from "../services/cloudfla
 import { formatDatabase, formatDatabases, formatQueryResult } from "../formatters/d1.js";
 import { truncateIfNeeded } from "../utils/pagination.js";
 import { handleApiError } from "../utils/errors.js";
+import { classifyReadOnlySql } from "../utils/sql.js";
 import { formatMetaLine, appendMeta, type MetaEnvelope } from "stallari-mcp-helpers";
 import {
   ListDatabasesSchema,
@@ -245,8 +246,10 @@ export function registerD1Tools(server: McpServer): void {
       title: "Query D1 Database (Read-Only)",
       description:
         `Execute a read-only SQL query against a D1 database.\n\n` +
-        `Use for SELECT queries. For write operations (INSERT, UPDATE, DELETE, ` +
-        `CREATE TABLE), use cf_d1_execute instead.\n\n` +
+        `Accepts a single read statement only: SELECT, WITH ... SELECT, ` +
+        `EXPLAIN [QUERY PLAN] of a read statement, or a read-form PRAGMA. ` +
+        `Anything else (INSERT, UPDATE, DELETE, DDL, multi-statement SQL) is ` +
+        `rejected — use cf_d1_execute (confirm=true) for writes.\n\n` +
         `Params: Use ?1, ?2, ... placeholders with the params array for safe binding.\n\n` +
         `Returns: { rows[], meta: { changes, duration, rows_read, rows_written } }`,
       inputSchema: QuerySchema,
@@ -259,6 +262,23 @@ export function registerD1Tools(server: McpServer): void {
     },
     async (params: QueryInput) => {
       try {
+        // Safety (AUD-04-03): this tool is annotated readOnlyHint — enforce it.
+        // The D1 /query endpoint executes any SQL, so reject anything that is
+        // not a single read-only statement.
+        const verdict = classifyReadOnlySql(params.sql);
+        if (!verdict.ok) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Query rejected: ${verdict.reason} cf_d1_query only accepts a ` +
+                `single read-only statement (SELECT, WITH ... SELECT, EXPLAIN, or ` +
+                `read-form PRAGMA). For write operations use cf_d1_execute with ` +
+                `confirm=true.`,
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const accountId = getAccountId(params.account_id);

@@ -66,7 +66,12 @@ export type DeleteDatabaseInput = z.infer<typeof DeleteDatabaseSchema>;
 
 export const QuerySchema = AccountIdSchema.extend({
   database_id: z.string().describe("D1 database UUID."),
-  sql: z.string().describe("SQL SELECT query."),
+  sql: z
+    .string()
+    .describe(
+      "Read-only SQL statement (SELECT, WITH ... SELECT, EXPLAIN, or read-form PRAGMA). " +
+        "Write statements are rejected — use cf_d1_execute for writes."
+    ),
   params: z
     .array(z.string())
     .optional()

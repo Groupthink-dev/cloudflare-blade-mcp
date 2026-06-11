@@ -111,6 +111,12 @@ export const CreateRecordSchema = ZoneIdentifierSchema.extend({
       "Structured data for complex record types (SRV, CAA, CERT, etc.). " +
         "E.g. SRV: {service: '_sip', proto: '_tcp', name: 'example.com', priority: 10, weight: 5, port: 5060, target: 'sip.example.com'}"
     ),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental write operations against production zones."
+    ),
 }).strict();
 
 export type CreateRecordInput = z.infer<typeof CreateRecordSchema>;
@@ -150,6 +156,12 @@ export const UpdateRecordSchema = ZoneIdentifierSchema.extend({
     .record(z.unknown())
     .optional()
     .describe("New structured data for complex record types."),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental write operations against production zones."
+    ),
 }).strict();
 
 export type UpdateRecordInput = z.infer<typeof UpdateRecordSchema>;
@@ -190,6 +202,12 @@ export const BulkCreateSchema = ZoneIdentifierSchema.extend({
     .describe(
       "Array of DNS records to create (max 100 per call). Each record needs type, name, content at minimum."
     ),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental bulk write operations against production zones."
+    ),
 }).strict();
 
 export type BulkCreateInput = z.infer<typeof BulkCreateSchema>;
@@ -211,6 +229,12 @@ export const BulkUpdateSchema = ZoneIdentifierSchema.extend({
     .min(1)
     .max(100)
     .describe("Array of DNS record updates (max 100 per call). Each needs record_id + fields to change."),
+  confirm: z
+    .literal(true)
+    .describe(
+      "Safety gate: must be explicitly set to true. " +
+        "This prevents accidental bulk write operations against production zones."
+    ),
 }).strict();
 
 export type BulkUpdateInput = z.infer<typeof BulkUpdateSchema>;

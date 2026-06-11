@@ -20,6 +20,7 @@ export function registerBulkTools(server: McpServer): void {
         `Each record in the array needs: type, name, content.\n` +
         `Optional per record: ttl, proxied, priority, comment, tags, data.\n\n` +
         `Records are created sequentially. If one fails, previously created records persist.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: { created: N, failed: N, results: [...] }`,
       inputSchema: BulkCreateSchema,
       annotations: {
@@ -31,6 +32,17 @@ export function registerBulkTools(server: McpServer): void {
     },
     async (params: BulkCreateInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Bulk create aborted. You must set confirm=true to bulk-create DNS records.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const results: Array<{
@@ -104,6 +116,7 @@ export function registerBulkTools(server: McpServer): void {
         `Update multiple DNS records in a single operation (max 100 per call).\n\n` +
         `Each record needs: record_id + any fields to change (content, name, ttl, proxied, comment, tags, data).\n\n` +
         `Records are updated sequentially. If one fails, previously updated records persist.\n\n` +
+        `Safety: You MUST set confirm=true to proceed.\n\n` +
         `Returns: { updated: N, failed: N, results: [...] }`,
       inputSchema: BulkUpdateSchema,
       annotations: {
@@ -115,6 +128,17 @@ export function registerBulkTools(server: McpServer): void {
     },
     async (params: BulkUpdateInput) => {
       try {
+        // Safety: confirm must be true (enforced by Zod z.literal(true))
+        if (!params.confirm) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Bulk update aborted. You must set confirm=true to bulk-update DNS records.",
+            }],
+            isError: true,
+          };
+        }
+
         const t0 = performance.now();
         const client = getClient();
         const results: Array<{
